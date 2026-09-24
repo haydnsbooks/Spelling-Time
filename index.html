@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PLD Spelling Activities</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Baloo+2:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="topbar" class="hidden" role="navigation" aria-label="Session">
+  <div class="bar">
+    <div class="tb" data-k="name"><button aria-expanded="false" id="tbName">Name</button></div>
+    <div class="tb" data-k="term"><button aria-expanded="false" id="tbTerm">Term –</button></div>
+    <div class="tb" data-k="week"><button aria-expanded="false" id="tbWeek">Week –</button></div>
+    <div class="tb" data-k="progress"><button id="tbProg">Progress</button></div>
+  </div>
+</div>
+
+<main class="sheet" id="app"><p id="loading" style="text-align:center">Loading…</p></main>
+<script>
+/* shows problems on screen instead of a blank page */
+window.addEventListener('error',function(e){
+  var m=document.getElementById('app'); if(!m) return;
+  var d=document.createElement('div'); d.className='notice'; d.style.marginTop='16px';
+  d.textContent='Something went wrong: '+(e.message||'a file did not load')+(e.filename?' ('+e.filename.split('/').pop()+(e.lineno?' line '+e.lineno:'')+')':'');
+  m.appendChild(d);
+},true);
+setTimeout(function(){ var l=document.getElementById('loading'); if(l) l.textContent='Still loading… If this stays here, one of the app files (js/app.js or the data files) has not loaded. Check they are in the right folders on GitHub.'; },6000);
+</script>
+
+<script src="js/config.js"></script>
+<script src="data/class-list.js"></script>
+<script src="data/pld-data.js"></script>
+<script src="data/content.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

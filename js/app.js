@@ -12,7 +12,7 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-09-25.3';
+const APP_VERSION = '2026-10-12.4';
 const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/supermarket.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);

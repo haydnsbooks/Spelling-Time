@@ -12,7 +12,7 @@ Spelling activities for PLD Stages 2–6: word list, phonic passage, spelling te
 | `js/config.js` | Google Sheet link | If the web app URL changes |
 | `data/class-list.js` | Rooms and students | When your class changes |
 | `data/pld-data.js` | PLD word lists, week index and passages | Only if the PLD data changes |
-| `data/content.js` | Definitions and cloze sentences | As each stage is added |
+| `data/content.js` | Definitions and cloze sentences for every week of Stages 2–6 | To change a definition or sentence |
 | `data/supermarket.js` | Supermarket aisles, items and prices | To change the food (add 1 to `version` when you do) |
 | `version.json` | The newest app version number | Every time you upload an update |
 

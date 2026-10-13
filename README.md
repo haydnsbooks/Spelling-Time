@@ -1,6 +1,6 @@
-# PLD Spelling Activities
+# Spelling Time
 
-Spelling activities for PLD Stages 2–6: word list, phonic passage, spelling tests (Easy/Hard), definitions quiz (Easy/Hard), cloze (Easy/Hard), editing passage and dictation. Student results, student passwords, teacher-set stages and activities, and supermarket purchases are stored in a Google Sheet.
+Spelling activities for PLD Stages 2–6: word list (tap a word for its pop-up), phonic passage, spelling tests (Easy/Hard), definitions quiz (Easy/Hard), cloze (Easy/Hard), editing passage and dictation. Student results, student passwords, teacher-set stages and activities, and supermarket purchases are stored in a Google Sheet.
 
 ## Files
 
@@ -13,10 +13,17 @@ Spelling activities for PLD Stages 2–6: word list, phonic passage, spelling te
 | `data/class-list.js` | Rooms and students | When your class changes |
 | `data/pld-data.js` | PLD word lists, week index and passages | Only if the PLD data changes |
 | `data/content.js` | Definitions and cloze sentences for every week of Stages 2–6 | To change a definition or sentence |
+| `data/word-info.js` | The word pop-up for every list word in Stages 2–6 (emoji, definition, part of speech, synonyms, antonyms, root, word family, prefixes and suffixes) | To change what a word's pop-up says |
 | `data/supermarket.js` | Supermarket aisles, items and prices | To change the food (add 1 to `version` when you do) |
 | `version.json` | The newest app version number | Every time you upload an update |
 
 `apps-script/Code.gs` is the Google Apps Script. **Don't upload it to GitHub**: once your teacher password is in it, it belongs only in the Google Sheet (Extensions → Apps Script).
+
+## Word pop-up
+
+In **Word List**, a student taps a word to hear it and open its pop-up. The pop-up shows the word (in its PLD colours) with emojis, then Definition, Part of Speech, Synonyms, Antonyms, Root, Word family and Prefixes and Suffixes. Anything that doesn't apply shows **n/a**. The pop-up scrolls on its own if it is taller than the screen, and closes with ✕, **Close** or a tap outside it.
+
+The pop-up text lives in `data/word-info.js`, one line per word. The first lines of that file explain each field. If a word's line is missing, the pop-up still opens and uses the definition from `data/content.js`.
 
 ## Releasing an update (version check)
 
@@ -63,7 +70,7 @@ Medals use only the medal activities (the 🏅 ones) that are switched on:
 
 With all 6 switched on, that's 2 / 4 / 6, the same as before. To change the percentages, edit `SILVER_PERCENT` and `BRONZE_PERCENT` in **both** `js/app.js` and `Code.gs`.
 
-Changing a term's activities recalculates medals and **restocks every student's supermarket** (all Fremantium given back).
+Changing a term's activities recalculates medals and **restocks every student's supermarket** (all Fremantium given back). This doesn't use up anyone's daily fridge Reset.
 
 ## Fremantium and the supermarket
 
@@ -71,7 +78,8 @@ Changing a term's activities recalculates medals and **restocks every student's 
 - The balance is always in the top bar. The Sheet works it out as *earned from medals − spent*.
 - **Supermarket:** 6 aisles (tabs), each with 4 shelves. The dearest items are on the top shelf and the cheapest are on the bottom. There's one of each item, 96 in total.
 - The prices add up to **648**, which is 36 weeks × 18. So a student can only buy everything by getting gold in every week of the year.
-- **Fridge:** each aisle has its own compartment (freezer, top shelf, middle shelf, fruit drawer, veggie drawer, door shelves). Items not bought yet show as grey silhouettes. **Reset** puts everything back on the shelves and gives all the Fremantium back.
+- **Fridge:** each aisle has its own compartment (freezer, top shelf, middle shelf, fruit drawer, veggie drawer, door shelves). Items not bought yet show as grey silhouettes.
+- **Reset** puts everything back on the shelves and gives all the Fremantium back. **Each student can use Reset once a day.** After that the button is greyed out with a note saying they can reset again tomorrow. Each use is logged in the **Resets** tab. "A day" follows the Google Sheet's time zone (**File → Settings → Time zone**), so check it is set to Perth. To give a student another Reset today, delete their row for today from the Resets tab.
 - The Sheet restocks a student's purchases automatically if their balance would go below zero (e.g. a stage change archives results) or if `version` in `data/supermarket.js` changes.
 
 ## Hosting on GitHub Pages
@@ -79,6 +87,8 @@ Changing a term's activities recalculates medals and **restocks every student's 
 1. Create a repository and upload everything in this folder **except `apps-script`** (keep the `css`, `js` and `data` folders).
 2. **Settings → Pages**: Source *Deploy from a branch*, branch `main`, folder `/ (root)`, then Save.
 3. The site appears at `https://<username>.github.io/<repository>/` after a minute or two.
+
+The browser tab and the iPad home-screen icon are both named **Spelling Time**.
 
 ## Google Sheet tabs (created automatically)
 
@@ -88,3 +98,4 @@ Changing a term's activities recalculates medals and **restocks every student's 
 - **Passwords**: Room, ClassNumber, Student, Password, UpdatedAt
 - **Activities**: Room, Term, Activities (the switched-on activities), UpdatedAt. No row for a term means every activity is on.
 - **Purchases**: Room, ClassNumber, Student, ItemId, Price, CatalogVersion, Timestamp
+- **Resets**: Room, ClassNumber, Student, Day, Timestamp (one row each time a student uses the fridge Reset)

@@ -568,3 +568,52 @@ table.dt{border-collapse:collapse;background:#fff;border:2px solid var(--ink);ma
 .dlg.update .up-ic{font-size:56px;line-height:1}
 .dlg.update .up-v{font-size:16px}
 .dlg.update .btn{font-size:22px;min-width:220px}
+
+/* ===== v10: centred buttons, iPad scrolling, word pop-up ===== */
+/* every page can scroll, so nothing is cut off on an iPad (100dvh = the visible screen on iPad Safari) */
+html{height:auto;min-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch}
+body{min-height:100vh;min-height:100dvh;overflow-x:hidden;overflow-y:visible}
+.sheet{padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+body:not(.kb-open) .sheet{margin-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+
+/* pop-ups scroll inside themselves when they are taller than the screen */
+.modal{align-items:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.modal>.dlg{margin:auto;max-width:min(520px,100%)}
+.cel{align-items:flex-start;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.cel-fx{position:fixed}
+.cel-card{margin:auto;max-height:none;overflow:visible}
+
+/* text and emojis sit in the middle of every button */
+.btn{display:inline-flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.35em;text-align:center;line-height:1.25;vertical-align:middle}
+.btn.big-audio,.cel-btn{display:flex;margin-left:auto;margin-right:auto}
+.btn>span[aria-hidden="true"]{line-height:1}
+.tile{align-items:center;justify-content:center;text-align:center}
+.tile .ic,.tile .nm{display:block;text-align:center}
+.tile.role{align-items:center}
+.tb>button{display:inline-flex;align-items:center;justify-content:center;gap:4px;text-align:center}
+.dd button{display:inline-flex;align-items:center;justify-content:center;text-align:center}
+.wcard{justify-content:center;text-align:center}
+.key{display:flex;align-items:center;justify-content:center;text-align:center;line-height:1}
+.atab{justify-content:center;text-align:center}
+.cel-snd{display:flex;align-items:center;justify-content:center}
+button.plate{display:inline-flex;align-items:center;justify-content:center;text-align:center}
+.clabel{display:inline-flex;align-items:center;justify-content:center;gap:4px}
+.good{justify-content:center;text-align:center}
+
+/* word pop-up */
+.wmodal{z-index:85}
+.dlg.wpop{position:relative;width:100%;max-width:min(660px,100%);text-align:left;padding:20px 22px 12px}
+.wp-x{position:absolute;top:10px;right:10px;width:46px;height:46px;border:2px solid var(--ink);border-radius:50%;background:#fff;font-size:20px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:2px 2px 0 var(--ink)}
+.wp-x:active{transform:translate(1px,1px);box-shadow:none}
+.wp-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 12px;margin:4px 50px 2px;text-align:center;font-size:clamp(36px,6.5vw,52px);line-height:1.15}
+.wp-h .chunk-word{white-space:normal;overflow-wrap:anywhere}
+.wp-em{font-size:.8em;letter-spacing:.06em;line-height:1}
+.wp-tools{margin:6px 0 14px}
+.wp-dl{margin:0;display:grid;gap:10px}
+.wp-row{background:#fff;border:2px solid var(--rule);border-radius:12px;padding:8px 14px}
+.wp-row dt{font-family:var(--display);font-weight:800;font-size:19px;line-height:1.2;color:var(--edit)}
+.wp-row dd{margin:3px 0 0;font-size:19px;line-height:1.45;overflow-wrap:anywhere}
+.wp-affix ul{margin:2px 0 0;padding-left:22px}
+.wp-affix li{margin:3px 0}
+.morph{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.92em;font-weight:700;color:#a3261c;background:#fff1c7;border:1px solid #f0d58a;border-radius:5px;padding:0 4px}
+@media (max-width:560px){.dlg.wpop{padding:16px 14px 10px}.wp-row dd,.wp-row dt{font-size:17px}}

@@ -1,10 +1,13 @@
 (function(){
 "use strict";
 /* =================================================================
-   PLD Spelling Activities
+   Spelling Time
    ================================================================= */
+const APP_NAME = 'Spelling Time';
+document.title = APP_NAME;
 const DATA = window.PLD_DATA;
 const CONTENT = window.CONTENT || {};
+const WORD_INFO = window.WORD_INFO || {};
 const CONFIG = window.APP_CONFIG || {};
 const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
 
@@ -12,8 +15,8 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-10-12.4';
-const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/supermarket.js'];
+const APP_VERSION = '2026-10-13.2';
+const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
   try{
@@ -40,7 +43,7 @@ async function ensureLatest(btn){
   const d=document.createElement('div'); d.className='modal';
   d.innerHTML=`<div class="dlg update" role="alertdialog" aria-modal="true" aria-labelledby="updH">
     <div class="up-ic" aria-hidden="true">🔄</div><h2 id="updH">Update needed</h2>
-    <p>There's a newer version of the spelling app.<br>Tap the button to get it. It only takes a moment.</p>
+    <p>There's a newer version of Spelling Time.<br>Tap the button to get it. It only takes a moment.</p>
     <p class="muted up-v">This iPad has version ${esc(APP_VERSION)}. The newest is ${esc(latest)}.</p>
     <div class="tools"><button class="btn primary" id="updBtn">Update the app</button></div></div>`;
   document.body.appendChild(d);
@@ -164,14 +167,21 @@ function flushResults(){
    The Google Sheet works out the balance: Fremantium earned from medals, minus what has been spent.
    The latest copy is kept on the iPad so the top bar can show it straight away. */
 const WALLET_KEY='pldSpell.wallet.v1';
-let wallet=null;                                   // {earned,spent,balance,owned:[itemIds]}
+let wallet=null;                                   // {earned,spent,balance,owned:[itemIds],resetToday}
 function walletId(){ return S.room+'|'+S.classNumber; }
 function loadWallet(){ wallet=(S.authed&&store.get(WALLET_KEY,{})[walletId()])||null; }
 function setWallet(j){
-  wallet={earned:+j.earned||0,spent:+j.spent||0,balance:+j.balance||0,owned:(j.owned||[]).map(String)};
+  wallet={earned:+j.earned||0,spent:+j.spent||0,balance:+j.balance||0,owned:(j.owned||[]).map(String),resetToday:!!j.resetToday};
+  if(wallet.resetToday) markResetUsed();
   const all=store.get(WALLET_KEY,{}); all[walletId()]=wallet; store.set(WALLET_KEY,all);
   updateTopbar();
 }
+/* the fridge Reset (all Fremantium given back) can only be used once a day.
+   The Google Sheet checks this too; the copy on the iPad lets the button switch off straight away. */
+const RESET_KEY='pldSpell.resetDay.v1';
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function markResetUsed(){ const m=store.get(RESET_KEY,{}); m[walletId()]=todayStr(); store.set(RESET_KEY,m); }
+function resetUsedToday(){ return !!(wallet&&wallet.resetToday) || store.get(RESET_KEY,{})[walletId()]===todayStr(); }
 async function refreshWallet(){
   if(!API.has()||!S.authed) return null;
   await flushResults().catch(()=>{});
@@ -390,7 +400,7 @@ function logout(){ stopAll(); S=Object.assign({},BLANK); teacher=null; wallet=nu
 /* ---------- router ---------- */
 let timers=[]; function clearTimers(){ timers.forEach(t=>{clearInterval(t);clearTimeout(t);}); timers=[]; }
 let reader=null;
-function stopAll(){ stopSpeech(); clearTimers(); if(reader){ reader.stop(); reader=null; } KB.hide(); if(screenAC){ screenAC.abort(); screenAC=null; } }
+function stopAll(){ stopSpeech(); clearTimers(); if(reader){ reader.stop(); reader=null; } KB.hide(); closeWordPopup(); if(screenAC){ screenAC.abort(); screenAC=null; } }
 const SCREENS={};
 function go(screen,arg){
   if(ACTS[screen]&&S.role==='student'&&!termActs(S.term).includes(screen)) screen='menu';   // activity switched off by the teacher
@@ -402,7 +412,7 @@ function go(screen,arg){
 
 /* ---------- login ---------- */
 SCREENS.role=function(){
-  app.innerHTML=`<div class="centre"><h1>Spelling time</h1><p class="muted" style="margin-bottom:28px">Who is logging in?</p>
+  app.innerHTML=`<div class="centre"><h1>Spelling Time</h1><p class="muted" style="margin-bottom:28px">Who is logging in?</p>
   <div class="rolegrid"><button class="tile role" id="rStu"><span class="ic" aria-hidden="true">🎒</span><span class="nm">Student</span></button>
   <button class="tile role" id="rTch"><span class="ic" aria-hidden="true">🍎</span><span class="nm">Teacher</span></button></div></div>`;
   $('#rStu').onclick=()=>go('studentLogin'); $('#rTch').onclick=()=>go('teacherLogin');
@@ -908,7 +918,7 @@ SCREENS.shop=function(arg){
   if(!(ai>=0&&ai<SHOP.aisles.length)) ai=0;
   let status=API.has()?'loading':'offline', busy=false;
   app.innerHTML=`<div class="act-head"><div><div class="crumb">${esc(S.student)}</div><h2>Supermarket</h2></div>
-    <div class="tools" style="margin:0"><button class="btn small" id="back">Back to activities</button><button class="btn small" id="toFridge">🧊 My fridge</button></div></div>
+    <div class="tools" style="margin:0"><button class="btn small" id="back">Back to activities</button><button class="btn small" id="toFridge"><span aria-hidden="true">🧊</span> My fridge</button></div></div>
     <div class="aisletabs" role="tablist" aria-label="Aisles">${SHOP.aisles.map((a,i)=>`<button role="tab" class="atab" data-i="${i}" style="--ac:${a.colour}"><span class="ic" aria-hidden="true">${a.icon}</span><span class="an">${esc(a.name)}</span></button>`).join('')}</div>
     <p id="shopmsg" class="shopmsg" role="status"></p>
     <div id="aisle"></div>`;
@@ -975,7 +985,7 @@ SCREENS.fridge=function(){
   let status=API.has()?'loading':'offline';
   const total=Object.keys(ITEM).length;
   app.innerHTML=`<div class="act-head"><div><div class="crumb">${esc(S.student)}</div><h2>My fridge</h2></div>
-    <div class="tools" style="margin:0"><button class="btn small" id="back">Back to activities</button><button class="btn small" id="toShop">🛒 Supermarket</button><button class="btn small" id="reset">↺ Reset</button></div></div>
+    <div class="tools" style="margin:0"><button class="btn small" id="back">Back to activities</button><button class="btn small" id="toShop"><span aria-hidden="true">🛒</span> Supermarket</button><button class="btn small" id="reset"><span aria-hidden="true">↺</span> Reset</button></div></div>
     <p id="fmsg" class="shopmsg" role="status"></p><div id="fbox"></div>`;
   $('#back').onclick=studentBack; $('#toShop').onclick=()=>go('shop');
   function comp(a,kind,owned,extra){
@@ -993,9 +1003,10 @@ SCREENS.fridge=function(){
   }
   function draw(){
     if(S.screen!=='fridge') return;
-    const owned=new Set(wallet?wallet.owned:[]), n=owned.size;
+    const owned=new Set(wallet?wallet.owned:[]), n=owned.size, used=resetUsedToday();
     $('#fmsg').innerHTML=(status==='offline'?"Couldn't reach the Google Sheet, so this shows what's saved on this iPad. ":'')
-      +`${n} of ${total} items in your fridge.`+(wallet?` You have ${frAmt(wallet.balance)} to spend.`:'')+(n<total?' Tap a label to go to that aisle.':' Your fridge is FULL. Amazing!');
+      +`${n} of ${total} items in your fridge.`+(wallet?` You have ${frAmt(wallet.balance)} to spend.`:'')+(n<total?' Tap a label to go to that aisle.':' Your fridge is FULL. Amazing!')
+      +(used?'<br><span class="muted">You have used Reset today. You can reset your fridge again tomorrow.</span>':'');
     const by=k=>SHOP.aisles.filter(a=>(FRIDGE_SPOT[a.id]||'shelf')===k);
     $('#fbox').innerHTML=`<div class="fridge">
       <div class="fz">${by('freezer').map(a=>comp(a,'freezer',owned)).join('')}<span class="handle h-fz" aria-hidden="true"></span></div>
@@ -1004,15 +1015,26 @@ SCREENS.fridge=function(){
           <div class="drawers">${by('drawer').map(a=>comp(a,'drawer',owned,'<div class="dfront"></div>')).join('')}</div>
         </div>${by('door').map(a=>door(a,owned)).join('')}<span class="handle h-fr" aria-hidden="true"></span></div>
       <div class="feet" aria-hidden="true"><i></i><i></i></div></div>`;
-    $('#reset').disabled=!(wallet&&n)||status!=='ready';
+    const rb=$('#reset');
+    rb.disabled=!(wallet&&n)||status!=='ready'||used;
+    rb.title=used?'You can use Reset once a day.':'';
   }
   $('#fbox').onclick=e=>{ const b=e.target.closest('[data-aisle]'); if(b) go('shop',{aisle:b.dataset.aisle}); };
   $('#reset').onclick=async()=>{
     if(!wallet||!wallet.owned.length) return;
-    if(!await confirmDlg(`<b>Empty your fridge?</b><br>Everything goes back on the supermarket shelves, and you get all ${wallet.spent} Fremantium back to spend again.`,'Yes, reset','Keep my food')) return;
+    if(resetUsedToday()){ toast('You have already used Reset today. You can reset your fridge again tomorrow.'); draw(); return; }
+    if(!await confirmDlg(`<b>Empty your fridge?</b><br>Everything goes back on the supermarket shelves, and you get all ${wallet.spent} Fremantium back to spend again.<span class="dlgwarn">⚠️ You can only use Reset <b>once a day</b>.</span>`,'Yes, reset','Keep my food')) return;
     const btn=$('#reset'); btn.disabled=true;
-    try{ const j=await API.post({action:'resetPurchases',room:S.room,classNumber:S.classNumber,catalogVersion:SHOP.version}); setWallet(j); draw(); toast(`The supermarket is restocked. You have ${wallet.balance} Fremantium to spend.`); }
-    catch(err){ toast(err.message); btn.disabled=false; }
+    try{
+      const j=await API.post({action:'resetPurchases',room:S.room,classNumber:S.classNumber,student:S.student,catalogVersion:SHOP.version});
+      markResetUsed(); setWallet(Object.assign({},j,{resetToday:true})); draw();
+      toast(`The supermarket is restocked. You have ${wallet.balance} Fremantium to spend.`);
+    }
+    catch(err){
+      if(/already used reset/i.test(err.message)){ markResetUsed(); if(wallet) wallet.resetToday=true; draw(); }
+      else btn.disabled=false;
+      toast(err.message);
+    }
   };
   draw();
   if(API.has()) refreshWallet().then(()=>{ status='ready'; draw(); }).catch(()=>{ status='offline'; draw(); });
@@ -1436,13 +1458,83 @@ function answerField(host,{multiline=false,value='',label,placeholder,mode='word
   KB.show(f,mode,onEnter); f.render(); return f;
 }
 
+/* ---------- word pop-up (tap a word in the Word List) ----------
+   The information comes from data/word-info.js. Each entry can have:
+     e   emoji(s)                     d   definition
+     p   part of speech code(s), e.g. 'n', 'v', 'n/v', 'adj'; add '|' and a note for anything extra
+     s   synonyms   a  antonyms       r   root (put word parts in `backticks` to highlight them; 'base' = a base word)
+     f   word family                  x   list of prefix/suffix sums, e.g. '`re` + act`ion` = reaction (a response)'
+   Leave a field out (or empty) and the pop-up shows "n/a". */
+const POS={
+  n:['Noun','Names a person, place, thing or idea.'],
+  pn:['Proper noun','Names one particular person, place, day, month or thing, so it starts with a capital letter.'],
+  v:['Verb','A doing or being word. It tells what someone or something does, is or has.'],
+  adj:['Adjective','Describes a noun. It tells what kind, which one or how many.'],
+  adv:['Adverb','Tells how, when, where or how often something happens.'],
+  pron:['Pronoun','Takes the place of a noun so you don\'t have to repeat it.'],
+  prep:['Preposition','Shows where or when something is, or how it is connected to something else.'],
+  conj:['Conjunction','Joins words, phrases or clauses together.'],
+  det:['Determiner','Comes before a noun to show which one, whose or how many.'],
+  num:['Number word','Tells how many or what order something is in.'],
+  interj:['Interjection','A word said on its own to show a feeling or to greet someone.'],
+  abbr:['Abbreviation','A short way of writing a longer word or title.'],
+  contr:['Contraction','Two words squashed together, with an apostrophe showing where letters are missing.'],
+  aux:['Helping verb','A verb that works with another verb, e.g. to show time or possibility.']
+};
+function morph(s){ return esc(s).replace(/`([^`]+)`/g,'<span class="morph">$1</span>'); }
+function posHTML(p){
+  if(!p) return 'n/a';
+  const [codes,note]=String(p).split('|');
+  const parts=codes.split('/').map(c=>POS[c.trim()]).filter(Boolean);
+  const main=parts.length===1
+    ? `<b>${parts[0][0]}.</b> ${esc(parts[0][1])}`
+    : parts.map(x=>`<b>${x[0]}:</b> ${esc(x[1])}`).join('<br>');
+  return (main||esc(codes))+(note?`<br><span class="muted">${morph(note.trim())}</span>`:'');
+}
+function listOrNA(v){
+  if(Array.isArray(v)) v=v.join(', ');
+  v=String(v==null?'':v).trim();
+  return v?morph(v.replace(/\.?$/,'.')):'n/a';
+}
+let wordPopupEl=null;
+function closeWordPopup(){ if(wordPopupEl){ wordPopupEl.remove(); wordPopupEl=null; document.removeEventListener('keydown',wordPopupKey); } }
+function wordPopupKey(e){ if(e.key==='Escape') closeWordPopup(); }
+function wordPopup(x){
+  closeWordPopup();
+  const word=x[0], info=WORD_INFO[word]||WORD_INFO[word.toLowerCase()]||{}, c=contentFor(word)||{};
+  const def=info.d||c.d||'';
+  const xs=Array.isArray(info.x)?info.x.filter(Boolean):[];
+  const row=(label,html)=>`<div class="wp-row"><dt>${label}:</dt><dd>${html}</dd></div>`;
+  const d=document.createElement('div'); d.className='modal wmodal';
+  d.innerHTML=`<div class="dlg wpop" role="dialog" aria-modal="true" aria-labelledby="wpH">
+    <button class="wp-x" type="button" aria-label="Close">✕</button>
+    <h2 id="wpH" class="wp-h"><span class="wp-word">${chunk(x)}</span>${info.e?` <span class="wp-em" aria-hidden="true">${esc(info.e)}</span>`:''}</h2>
+    <div class="tools wp-tools"><button class="btn small" type="button" id="wpHear"><span aria-hidden="true">🔊</span> Hear it</button></div>
+    <dl class="wp-dl">
+      ${row('Definition',def?esc(def):'n/a')}
+      ${row('Part of Speech',posHTML(info.p))}
+      ${row('Synonyms',listOrNA(info.s))}
+      ${row('Antonyms',listOrNA(info.a))}
+      ${row('Root',info.r==='base'?`${morph('`'+word+'`')} is a base word. It can't be split into smaller parts that have their own meaning.`:info.r?morph(info.r):'n/a')}
+      ${row('Word family',listOrNA(info.f))}
+      <div class="wp-row wp-affix"><dt>Prefixes and Suffixes:</dt><dd>${xs.length?`<ul>${xs.map(s=>`<li>${morph(s)}</li>`).join('')}</ul>`:'n/a'}</dd></div>
+    </dl>
+    <div class="tools"><button class="btn primary" type="button" id="wpClose">Close</button></div></div>`;
+  d.addEventListener('click',e=>{ if(e.target===d||e.target.closest('.wp-x,#wpClose')) closeWordPopup(); });
+  document.body.appendChild(d); wordPopupEl=d;
+  document.addEventListener('keydown',wordPopupKey);
+  d.querySelector('#wpHear').onclick=()=>speak(word);
+  d.querySelector('#wpClose').focus({preventScroll:true});
+  speak(word);
+}
+
 /* ---------- Word list ---------- */
 function actWordList(){
   const L=listData(); const w=weekData(); const body=shell('wordlist');
   body.innerHTML=`<p style="margin-bottom:4px"><b>${esc(L.t)}</b></p>${w.n?`<p class="muted">${esc(w.n)}</p>`:''}
-  <p class="muted">Tap a word to hear it.</p>
+  <p class="muted">Tap a word to hear it and find out more about it.</p>
   <div class="wl">${L.w.map((x,i)=>`<button class="wcard" data-i="${i}">${chunk(x)}${x[2]&1?'<span class="hf" title="High frequency word">HF</span>':''}</button>`).join('')}</div>`;
-  body.querySelectorAll('.wcard').forEach(b=>b.onclick=()=>speak(L.w[+b.dataset.i][0]));
+  body.querySelectorAll('.wcard').forEach(b=>b.onclick=()=>wordPopup(L.w[+b.dataset.i]));
 }
 
 /* ---------- Phonic passage ---------- */
@@ -1460,10 +1552,10 @@ function actPassage(){
   const m=listWordMatcher();
   const html=P.c.split(/(\s+)/).map(t=>/^\s+$/.test(t)?t:(m(t)?`<mark>${esc(t)}</mark>`:esc(t))).join('');
   body.innerHTML=`<h3>${esc(P.t)}</h3>
-  <div class="tools"><button class="btn primary small" id="read">🔊 Read it to me</button><button class="btn small" id="stop">Stop</button><button class="btn small" id="hl">Hide list words</button></div>
+  <div class="tools"><button class="btn primary small" id="read"><span aria-hidden="true">🔊</span> Read it to me</button><button class="btn small" id="stop">Stop</button><button class="btn small" id="hl">Hide list words</button></div>
   <div class="passage" id="ptxt">${html}</div>`;
   $('#read').onclick=()=>speak(P.c,0.9); $('#stop').onclick=stopSpeech;
-  let on=true; $('#hl').onclick=e=>{ on=!on; $('#ptxt').classList.toggle('nohl',!on); e.target.textContent=on?'Hide list words':'Show list words'; };
+  let on=true; $('#hl').onclick=e=>{ on=!on; $('#ptxt').classList.toggle('nohl',!on); e.currentTarget.textContent=on?'Hide list words':'Show list words'; };
 }
 
 /* ---------- Definitions / Cloze ---------- */
@@ -1507,19 +1599,19 @@ function testEasy(){
   }
   function look(){
     const x=items[i];
-    frame(0,`<div class="bigword">${chunk(x)}</div>`,`<button class="btn" id="hear">🔊 Hear it</button><button class="btn primary" id="n">I've looked at it</button>`);
+    frame(0,`<div class="bigword">${chunk(x)}</div>`,`<button class="btn" id="hear"><span aria-hidden="true">🔊</span> Hear it</button><button class="btn primary" id="n">I've looked at it</button>`);
     $('#hear').onclick=()=>speak(x[0]); $('#n').onclick=say;
   }
   function say(){
     const x=items[i];
-    frame(1,`<div><div class="bigword">${chunk(x)}</div><p class="muted">Say the word out loud.</p></div>`,`<button class="btn" id="hear">🔊 Hear it</button><button class="btn primary" id="n">I said it. Cover it</button>`);
+    frame(1,`<div><div class="bigword">${chunk(x)}</div><p class="muted">Say the word out loud.</p></div>`,`<button class="btn" id="hear"><span aria-hidden="true">🔊</span> Hear it</button><button class="btn primary" id="n">I said it. Cover it</button>`);
     $('#hear').onclick=()=>speak(x[0]); $('#n').onclick=cover;
   }
   function cover(){ frame(2,`<div class="cover">Covered!</div>`); timers.push(setTimeout(()=>write(''),900)); }
   function write(prefill){
     const x=items[i];
     frame(3,`<div style="width:100%"><div class="boxes" aria-label="${x[0].length} characters">${'<i></i>'.repeat(x[0].length)}</div><div id="ansf"></div></div>`,
-      `<button class="btn" id="hear">🔊 Hear it</button><button class="btn primary" id="n">Check it</button>`);
+      `<button class="btn" id="hear"><span aria-hidden="true">🔊</span> Hear it</button><button class="btn primary" id="n">Check it</button>`);
     const goCheck=()=>{ if(f.value.trim()) check(f.value.trim()); };
     const f=answerField($('#ansf'),{value:prefill,label:'Write the word',onEnter:goCheck});
     $('#hear').onclick=()=>speak(x[0]); $('#n').onclick=goCheck;
@@ -1545,7 +1637,7 @@ function testHard(){
     if(i>=items.length) return finishScored(body,activity,items.map((x,k)=>({ok:same(answers[k]||'',x[0]),given:answers[k]||'',correct:chunk(x)})));
     const x=items[i];
     body.innerHTML=`<div class="qcard">${prog(items.length,i)}<p class="muted">Listen to the word, then spell it.</p>
-      <button class="btn big-audio" id="hear">🔊 Play word</button>
+      <button class="btn big-audio" id="hear"><span aria-hidden="true">🔊</span> Play word</button>
       <div class="answer" style="margin-top:20px"><div id="ansf"></div></div>
       <div class="tools"><button class="btn primary" id="sub">${i+1<items.length?'Next':'Finish'}</button></div></div>`;
     const submit=()=>{ answers[i]=f.value.trim(); i++; next(); };

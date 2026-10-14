@@ -15,7 +15,7 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-10-13.2';
+const APP_VERSION = '2026-10-14.1';
 const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
@@ -72,26 +72,56 @@ function save(){ if(S.role==='student') store.set(SESSION_KEY,S); }
 let teacher=null;            // {room,password} – kept in memory only, never saved on the device
 let screenAC=null;           // aborts screen-level listeners on navigation
 
-/* ---------- Google Sheet connection ---------- */
+/* ---------- Google Sheet connection ----------
+   Google runs at most 30 Apps Script requests at the same time for one account, and every iPad's
+   requests count towards the teacher's account. So: each student screen asks for everything in ONE
+   request (see sync below), an iPad never sends more than 2 requests at once, and a request that
+   fails because the sheet is busy is tried again after a short random wait. */
+const API_TIMEOUT=30000, API_RETRIES=2, API_MAX_ACTIVE=2;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let apiActive=0; const apiWaiting=[];
+async function apiSlot(){ if(apiActive>=API_MAX_ACTIVE) await new Promise(r=>apiWaiting.push(r)); apiActive++; }
+function apiFree(){ apiActive--; const next=apiWaiting.shift(); if(next) next(); }
+const NET_MSG={
+  offline:"This iPad isn't connected to the internet. Check the Wi-Fi, then try again.",
+  timeout:"The Google Sheet took too long to answer. It's probably busy with lots of students at once. Wait a moment, then try again.",
+  blocked:"The Google Sheet didn't answer. This usually happens when lots of students are using it at the same moment. Wait a moment, then try again. If it keeps happening, open the web app link from js/config.js in a browser to check the Apps Script."
+};
 const API={
   has(){ return !!String(CONFIG.SHEETS_URL||'').trim(); },
-  async call(method,payload){
+  async once(method,payload){
     const url=String(CONFIG.SHEETS_URL||'').trim();
     if(!url) throw Object.assign(new Error('The Google Sheet link is not set up in js/config.js.'),{kind:'nourl'});
-    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),20000);
-    let res;
+    await apiSlot();
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),API_TIMEOUT);
     try{
-      res = method==='GET'
-        ? await fetch(url+'?'+new URLSearchParams(payload),{signal:ctl.signal})
-        : await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:ctl.signal});
-    }catch(e){ throw Object.assign(new Error("Couldn't reach the Google Sheet. Check the internet connection and try again."),{kind:'network'}); }
-    finally{ clearTimeout(t); }
-    if(!res.ok) throw Object.assign(new Error(res.status===404
-      ? "The Google Sheet web app couldn't be found (error 404). In Apps Script, open Deploy → Manage deployments, copy the Web app URL and check it matches js/config.js. Also check \"Who has access\" is set to Anyone."
-      : `The Google Sheet web app sent back an error (${res.status}). Check the Apps Script deployment.`),{kind:'network',status:res.status});
-    let j; try{ j=await res.json(); }catch(e){ throw Object.assign(new Error('The Google Sheet sent back a web page instead of data. In Apps Script, check Deploy → Manage deployments: "Execute as" should be Me and "Who has access" should be Anyone.'),{kind:'network'}); }
-    if(!j.ok) throw Object.assign(new Error(j.error||'The Google Sheet returned an error.'),{kind:'server'});
-    return j;
+      let res;
+      try{
+        res = method==='GET'
+          ? await fetch(url+'?'+new URLSearchParams(payload),{signal:ctl.signal})
+          : await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:ctl.signal});
+      }catch(e){
+        const reason=navigator.onLine===false?'offline':ctl.signal.aborted?'timeout':'blocked';
+        throw Object.assign(new Error(NET_MSG[reason]),{kind:'network',reason});
+      }
+      if(!res.ok) throw Object.assign(new Error(res.status===404
+        ? "The Google Sheet web app couldn't be found (error 404). In Apps Script, open Deploy → Manage deployments, copy the Web app URL and check it matches js/config.js. Also check \"Who has access\" is set to Anyone."
+        : `The Google Sheet web app sent back an error (${res.status}). Wait a moment and try again. If it keeps happening, check the Apps Script deployment.`),{kind:'network',status:res.status,reason:res.status===404?'notfound':'http'});
+      let j; try{ j=await res.json(); }catch(e){ throw Object.assign(new Error('The Google Sheet sent back a web page instead of data. In Apps Script, check Deploy → Manage deployments: "Execute as" should be Me and "Who has access" should be Anyone.'),{kind:'network',reason:'html'}); }
+      if(!j.ok) throw Object.assign(new Error(j.error||'The Google Sheet returned an error.'),{kind:j.busy?'busy':'server'});
+      return j;
+    }finally{ clearTimeout(t); apiFree(); }
+  },
+  async call(method,payload){
+    for(let attempt=0;;attempt++){
+      try{ return await this.once(method,payload); }
+      catch(e){
+        const retry=e.reason==='timeout' ? attempt<1        // a request that timed out is only tried once more
+          : attempt<API_RETRIES && (e.kind==='busy' || (e.kind==='network' && ['blocked','http'].includes(e.reason)));
+        if(!retry) throw e;
+        await sleep((attempt?4000:1500)+Math.random()*3000);   // spread the class out so they don't all try again at once
+      }
+    }
   },
   get(p){ return this.call('GET',p); },
   post(p){ return this.call('POST',p); }
@@ -125,11 +155,6 @@ function medalRule(mt){
   p.push(`${mt===1?'1':'all '+mt} for 🥇`);
   return 'Get 100% to turn an activity green. '+p.join(', ')+'.';
 }
-async function syncActs(room){
-  const j=await API.get({action:'getActivities',room});
-  const all=store.get(ACTS_KEY,{}); all[room]=j.terms||{}; store.set(ACTS_KEY,all);
-  return all[room];
-}
 const pkey=(term,stage,week)=>[S.room,S.classNumber,term,stage,week].join('|');
 function markDone(r){
   const m=store.get(DONE_KEY,{}); const k=pkey(r.term,r.stage,r.week);
@@ -148,19 +173,77 @@ function recordResult(activity,score,total){
   const q=store.get(PEND_KEY,[]); q.push(rec); store.set(PEND_KEY,q);
   flushResults();
 }
-let flushP=null;
-function flushResults(){
-  if(!API.has()) return Promise.resolve();
-  if(flushP) return flushP;                          // already sending: wait for the same run
-  flushP=(async()=>{
-    while(true){
-      const q=store.get(PEND_KEY,[]); if(!q.length) break;
-      try{ await API.post(q[0]); }
-      catch(e){ if(e.kind!=='server') break; }          // network problem: keep it and try again later
-      const q2=store.get(PEND_KEY,[]); if(q2.length&&q2[0].id===q[0].id){ q2.shift(); store.set(PEND_KEY,q2); }
+/* send results waiting on this iPad (and get everything else back in the same request) */
+function flushResults(){ return sync({force:true}).catch(()=>false); }
+
+/* ---------- sync: everything a student's screens need, in ONE request ----------
+   Sends any results waiting on this iPad and gets back the student's stages, results (every term),
+   the activities switched on and their Fremantium wallet. Screens opened again within SYNC_FRESH_MS
+   reuse the last answer, so moving between screens doesn't keep asking the Google Sheet. */
+const SYNC_FRESH_MS=15000;
+let syncP=null, syncQ=null, lastSync=0, lastSyncWho='', legacyApi=false, syncSending=new Set();
+function dropPending(ids){
+  if(!ids||!ids.length) return;
+  const set=new Set(ids.map(String));
+  store.set(PEND_KEY,store.get(PEND_KEY,[]).filter(r=>!set.has(String(r.id))));
+}
+function applySync(j){
+  const m=store.get(DONE_KEY,{}), pre=[S.room,S.classNumber].join('|')+'|';
+  Object.keys(m).forEach(k=>{ if(k.startsWith(pre)) delete m[k]; }); store.set(DONE_KEY,m);
+  (j.results||[]).forEach(markDone);
+  store.get(PEND_KEY,[]).filter(r=>r.room===S.room&&r.classNumber===S.classNumber).forEach(markDone);
+  const cache=store.get(STAGE_KEY,{});
+  [1,2,3,4].forEach(t=>{
+    const ck=S.room+'|'+t, map=Object.assign({},cache[ck]||{}), st=(j.stages||{})[t];
+    if(st) map[S.classNumber]=+st; else delete map[S.classNumber];
+    cache[ck]=map;
+  });
+  store.set(STAGE_KEY,cache);
+  const all=store.get(ACTS_KEY,{}); all[S.room]=j.activities||{}; store.set(ACTS_KEY,all);
+  if(j.wallet){
+    setWallet(j.wallet);
+    if(j.wallet.reset) toast(`The supermarket has been restocked, so you have ${wallet.balance} Fremantium to spend again.`);
+  }
+}
+/* for an Apps Script that hasn't been updated yet: the old one-thing-at-a-time requests, sent one after another */
+async function legacySync(){
+  const sent=store.get(PEND_KEY,[]); syncSending=new Set(sent.map(r=>String(r.id)));
+  for(const r of sent){
+    try{ await API.post(Object.assign({},r,{action:'addResult'})); dropPending([r.id]); }
+    catch(e){ if(e.kind==='server') dropPending([r.id]); else break; }
+  }
+  const room=S.room, cn=S.classNumber, j={stages:{},results:[]};
+  j.activities=(await API.get({action:'getActivities',room})).terms||{};
+  for(const t of [1,2,3,4]){
+    const st=((await API.get({action:'getStages',room,term:t})).stages||[]).find(s=>s.classNumber===cn);
+    if(st) j.stages[t]=st.stage;
+    ((await API.get({action:'getResults',room,classNumber:cn,term:t})).results||[]).forEach(r=>j.results.push(Object.assign({},r,{term:t})));
+  }
+  j.wallet=await API.get({action:'getWallet',room,classNumber:cn,catalogVersion:SHOP.version});
+  return j;
+}
+function sync({force=false,jitter=false}={}){
+  if(!API.has()||!S.authed) return Promise.resolve(false);
+  const who=walletId(), pending=store.get(PEND_KEY,[]).some(r=>!syncSending.has(String(r.id)));   // results not already on their way
+  if(syncP){
+    if(!force&&!pending) return syncP;              // already asking: share the same answer
+    return syncQ=syncQ||syncP.catch(()=>{}).then(()=>{ syncQ=null; return sync({force:true}); });
+  }
+  if(!force&&!pending&&lastSyncWho===who&&Date.now()-lastSync<SYNC_FRESH_MS) return Promise.resolve(true);
+  syncP=(async()=>{
+    if(jitter) await sleep(Math.random()*1200);      // a class opening the app together doesn't all ask in the same second
+    let j;
+    if(!legacyApi){
+      const sent=store.get(PEND_KEY,[]); syncSending=new Set(sent.map(r=>String(r.id)));
+      try{ j=await API.post({action:'studentSync',room:S.room,classNumber:S.classNumber,catalogVersion:SHOP.version,results:sent}); dropPending(j.saved); }
+      catch(e){ if(e.kind==='server'&&/Unknown action/.test(e.message)) legacyApi=true; else throw e; }
     }
-  })().finally(()=>{ flushP=null; });
-  return flushP;
+    if(legacyApi) j=await legacySync();
+    if(!S.authed||walletId()!==who) return false;    // logged out while waiting
+    applySync(j); lastSync=Date.now(); lastSyncWho=who;
+    return true;
+  })().finally(()=>{ syncP=null; syncSending=new Set(); });
+  return syncP;
 }
 
 /* ---------- Fremantium wallet ----------
@@ -182,38 +265,19 @@ const RESET_KEY='pldSpell.resetDay.v1';
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function markResetUsed(){ const m=store.get(RESET_KEY,{}); m[walletId()]=todayStr(); store.set(RESET_KEY,m); }
 function resetUsedToday(){ return !!(wallet&&wallet.resetToday) || store.get(RESET_KEY,{})[walletId()]===todayStr(); }
-async function refreshWallet(){
+async function refreshWallet(opts){
   if(!API.has()||!S.authed) return null;
-  await flushResults().catch(()=>{});
-  const who=walletId();
-  const j=await API.get({action:'getWallet',room:S.room,classNumber:S.classNumber,catalogVersion:SHOP.version});
-  if(!S.authed||walletId()!==who) return null;     // logged out while waiting
-  setWallet(j);
-  if(j.reset) toast(`The supermarket has been restocked, so you have ${wallet.balance} Fremantium to spend again.`);
-  return wallet;
+  return (await sync(opts))?wallet:null;
 }
 function frIcon(cls){
   return `<svg class="fr-ic ${cls||''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="11" fill="#17a398" stroke="#0b5f5a" stroke-width="1.6"/><circle cx="12" cy="12" r="8.2" fill="none" stroke="#8ff0e6" stroke-width="1"/><path d="M12 5.2l2.1 3.6-2.1 1.3-2.1-1.3z" fill="#d9fffb"/><text x="12" y="17.6" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" font-family="'Baloo 2',Andika,sans-serif">F</text></svg>`;
 }
 function frAmt(n,cls){ return `<span class="fr-amt ${cls||''}">${frIcon()}<b>${n}</b><span class="sr"> Fremantium</span></span>`; }
-async function syncProgress(){
-  if(!API.has()||!S.term||S.classNumber==null) return false;
-  const j=await API.get({action:'getResults',room:S.room,classNumber:S.classNumber,term:S.term});
-  const m=store.get(DONE_KEY,{}); const pre=[S.room,S.classNumber,S.term].join('|')+'|';
-  Object.keys(m).forEach(k=>{ if(k.startsWith(pre)) delete m[k]; }); store.set(DONE_KEY,m);
-  (j.results||[]).forEach(r=>markDone(Object.assign({},r,{term:S.term})));
-  store.get(PEND_KEY,[]).filter(r=>r.room===S.room&&r.classNumber===S.classNumber&&r.term===S.term).forEach(markDone);
-  return true;
-}
 async function resolveStage(){
-  const cache=store.get(STAGE_KEY,{}); const ck=S.room+'|'+S.term;
+  const ck=S.room+'|'+S.term;
   let checked=false;
-  try{
-    if(API.has()){
-      const j=await API.get({action:'getStages',room:S.room,term:S.term});
-      const map={}; (j.stages||[]).forEach(s=>map[s.classNumber]=s.stage); cache[ck]=map; store.set(STAGE_KEY,cache); checked=true;
-    }
-  }catch(e){}
+  try{ if(API.has()) checked=await sync(); }catch(e){}
+  const cache=store.get(STAGE_KEY,{});
   const st=(cache[ck]||{})[S.classNumber]||null;
   if(st){ S.stage=+st; S.stageLocked=true; }
   else { S.stage=null; S.stageLocked=false; }
@@ -847,8 +911,7 @@ SCREENS.menu=function(){
   }
   draw();
   if(!API.has()) return;
-  flushResults().then(()=>Promise.all([syncProgress(),syncActs(S.room)])).then(()=>draw()).catch(()=>{});
-  refreshWallet().catch(()=>{});
+  sync({jitter:true}).then(ok=>{ if(ok) draw(); }).catch(()=>{});
 };
 const TERM_TROPHY={1:'🪐',2:'💫',3:'🔱',4:'⚜️'};
 function stageForTerm(term){ const m=(store.get(STAGE_KEY,{})[S.room+'|'+term])||{}; return m[S.classNumber]?+m[S.classNumber]:null; }
@@ -856,18 +919,6 @@ function weekMedal(term,stage,week){
   if(!stage) return null;
   const done=store.get(DONE_KEY,{})[[S.room,S.classNumber,term,stage,week].join('|')]||{};
   return medalFromDone(done,term);
-}
-async function syncTerm(term){
-  const j=await API.get({action:'getResults',room:S.room,classNumber:S.classNumber,term});
-  const m=store.get(DONE_KEY,{}); const pre=[S.room,S.classNumber,term].join('|')+'|';
-  Object.keys(m).forEach(k=>{ if(k.startsWith(pre)) delete m[k]; }); store.set(DONE_KEY,m);
-  (j.results||[]).forEach(r=>markDone(Object.assign({},r,{term})));
-  store.get(PEND_KEY,[]).filter(r=>r.room===S.room&&r.classNumber===S.classNumber&&r.term===term).forEach(markDone);
-}
-async function syncStages(term){
-  const j=await API.get({action:'getStages',room:S.room,term});
-  const cache=store.get(STAGE_KEY,{}); const map={}; (j.stages||[]).forEach(s=>map[s.classNumber]=s.stage);
-  cache[S.room+'|'+term]=map; store.set(STAGE_KEY,cache);
 }
 SCREENS.progress=function(){
   if(S.role!=='student') return go('role');
@@ -896,8 +947,7 @@ SCREENS.progress=function(){
   }
   draw(API.has()?'loading':'offline');
   if(!API.has()) return;
-  flushResults().then(()=>Promise.all([syncActs(S.room),...[1,2,3,4].flatMap(t=>[syncStages(t),syncTerm(t)])]))
-    .then(()=>draw('ready')).catch(()=>draw('offline'));
+  sync({jitter:true}).then(ok=>draw(ok?'ready':'offline')).catch(()=>draw('offline'));
 };
 
 /* ---------- supermarket + fridge ---------- */
@@ -954,7 +1004,11 @@ SCREENS.shop=function(arg){
       setWallet(j); kaching(); bumpFr(); draw();
       const nb=$('#aisle')&&$('#aisle').querySelector(`[data-id="${it.id}"]`); if(nb) nb.classList.add('justsold');
       toast(`${it.em} The ${it.name} is in your fridge!`);
-    }catch(err){ toast(err.message); refresh(); }
+    }catch(err){
+      // a slow connection can mean the first try went through: check before saying it failed
+      if(/already sold out/i.test(err.message)){ try{ await sync({force:true}); }catch(e){} if(wallet&&wallet.owned.includes(it.id)){ draw(); toast(`${it.em} The ${it.name} is in your fridge!`); return; } }
+      toast(err.message); refresh();
+    }
     finally{ busy=false; }
   };
   async function refresh(){ try{ await refreshWallet(); status='ready'; }catch(e){ status='offline'; } draw(); }
@@ -1062,21 +1116,20 @@ function goldWeeks(){ let c=0; for(let w=1;w<=9;w++) if(weekMedal(S.term,S.stage
 const withTimeout=(p,ms)=>Promise.race([p,new Promise(r=>setTimeout(r,ms))]);
 async function celebrateResult(score,total,before){
   const after=awardState(); let tier=1;
+  // Fremantium for reaching a medal for the first time this week (3 bronze, 5 silver, 10 gold)
+  const fr=Math.max(0,medalValue(after.medal)-medalValue(before.medal));
+  if(fr&&wallet){ wallet.earned+=fr; wallet.balance+=fr; updateTopbar(); bumpFr(); }   // the Google Sheet's answer to the result being saved confirms it
   if(score===total){
     tier=2;
     if(after.medal&&(MRANK[after.medal]||0)>(MRANK[before.medal]||0)) tier=2+MRANK[after.medal];
     if(after.term&&!before.term){
       tier=6;
       // bring the other terms up to date before deciding on the whole year trophy
-      if(API.has()) await withTimeout(Promise.all([1,2,3,4].filter(t=>t!==S.term).flatMap(t=>[syncStages(t),syncTerm(t)])).catch(()=>{}),5000);
+      if(API.has()) await withTimeout(sync().catch(()=>{}),8000);
       if([1,2,3,4].every(termTrophyFor)) tier=7;
     }
   }
-  // Fremantium for reaching a medal for the first time this week (3 bronze, 5 silver, 10 gold)
-  const fr=Math.max(0,medalValue(after.medal)-medalValue(before.medal));
-  if(fr&&wallet){ wallet.earned+=fr; wallet.balance+=fr; updateTopbar(); bumpFr(); }
   showCelebration(tier,{score,total,term:S.term,week:S.week,n:after.n,mt:after.mt,fr,goldWeeks:goldWeeks(),name:S.firstName||S.student});
-  refreshWallet().catch(()=>{});
 }
 function nextHint(n,mt){
   if(!mt||n>=mt) return '';

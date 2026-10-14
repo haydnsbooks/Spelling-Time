@@ -49,6 +49,22 @@ If the two don't match, everyone gets the update pop-up every time they log in, 
 2. **"couldn't be found (error 404)"** or a Google error page: in Apps Script go to **Deploy → Manage deployments**. Copy the **Web app URL** of the active deployment and make sure `js/config.js` has exactly that URL. If you made a *New deployment* instead of editing the existing one, the URL will have changed.
 3. **"sent back a web page instead of data"**: in the deployment settings, *Execute as* should be **Me** and *Who has access* should be **Anyone**.
 4. **"That password is not right"** for the teacher: check `TEACHER_PASSWORD` at the top of Code.gs, then deploy a new version.
+5. **"The Google Sheet didn't answer"**, **"took too long to answer"** or **"is busy with lots of students at once"**: see the next section.
+
+## When the whole class uses it at once
+
+Google lets the Apps Script run at most **30 requests at the same time** for one Google account, and because the web app runs as you (*Execute as: Me*), every iPad's requests count towards your account. When too many arrive together, Google turns the extra ones away and the app can't read why.
+
+The app keeps the class under that limit:
+
+- Each student screen (activities menu, trophy cabinet, supermarket, fridge) gets everything it needs in **one request** (`studentSync`), which also saves any results waiting on the iPad. Opening another screen within 15 seconds reuses that answer instead of asking again.
+- An iPad never sends more than 2 requests at once, and the activities menu and trophy cabinet wait a random moment (up to about 1 second) so a whole class opening the app together doesn't all ask in the same second.
+- A request that fails because the sheet is busy or didn't answer is **tried again automatically** (up to twice, after a short random wait) before the student sees a message.
+- Only requests that change the sheet (saving results, buying, Reset, passwords, teacher changes) wait their turn to write. Reading never waits.
+
+The message a student sees now says which problem it was: no internet on the iPad, the sheet took too long, the sheet didn't answer (usually too many at once) or the sheet was busy. If one keeps appearing when only a few students are on, open **Executions** in Apps Script to see the failed runs and their error.
+
+If the new app is uploaded before the new Code.gs is deployed, it still works: it notices the old Apps Script and uses the old one-thing-at-a-time requests (slower, but nothing breaks). Deploy the new Code.gs to get the full benefit.
 
 ## Student passwords
 

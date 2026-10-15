@@ -15,7 +15,7 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-10-14.1';
+const APP_VERSION = '2026-10-15.1';
 const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
@@ -65,10 +65,10 @@ const store = {
 
 /* ---------- state ---------- */
 const SESSION_KEY='pldSpell.session.v3';   // v3: students now log in with a password, so older sessions are ignored
-const BLANK={role:null,room:null,student:null,firstName:null,classNumber:null,term:null,stage:null,week:null,stageLocked:false,authed:false,screen:'role'};
+const BLANK={role:null,room:null,student:null,firstName:null,classNumber:null,term:null,stage:null,week:null,stageLocked:false,authed:false,demo:false,screen:'role'};
 let S=Object.assign({},BLANK,store.get(SESSION_KEY,{}));
-if(S.role!=='student'||!S.student||!S.authed) S=Object.assign({},BLANK);
-function save(){ if(S.role==='student') store.set(SESSION_KEY,S); }
+if(S.role!=='student'||!S.student||!S.authed||S.demo) S=Object.assign({},BLANK);
+function save(){ if(S.role==='student'&&!S.demo) store.set(SESSION_KEY,S); }   // teacher view is never saved on the device
 let teacher=null;            // {room,password} – kept in memory only, never saved on the device
 let screenAC=null;           // aborts screen-level listeners on navigation
 
@@ -138,7 +138,7 @@ const DONE_KEY='pldSpell.done.v2', PEND_KEY='pldSpell.pending.v1', STAGE_KEY='pl
    Bronze = BRONZE_PERCENT of them at 100%, rounded up                */
 const SILVER_PERCENT=60, BRONZE_PERCENT=30;
 const FR_PAY={bronze:3,silver:5,gold:10};          // Fremantium for reaching each medal for the first time in a week
-function termActs(term,room){ const m=((store.get(ACTS_KEY,{})[room||S.room])||{})[term]; return Array.isArray(m)&&m.length?m:ALL_ACTS; }
+function termActs(term,room){ if(S.demo) return ALL_ACTS; const m=((store.get(ACTS_KEY,{})[room||S.room])||{})[term]; return Array.isArray(m)&&m.length?m:ALL_ACTS; }
 function medalActs(term,room){ const on=termActs(term,room); return ASSESSED.filter(a=>on.includes(a)); }
 function thresholds(total){ return {bronze:Math.ceil(total*BRONZE_PERCENT/100),silver:Math.ceil(total*SILVER_PERCENT/100),gold:total}; }
 function medalFor(n,total){
@@ -162,11 +162,12 @@ function markDone(r){
   if(!prev||r.score/r.total>prev.score/prev.total) m[k][r.activity]={score:r.score,total:r.total};
   store.set(DONE_KEY,m);
 }
-function weekDone(){ return store.get(DONE_KEY,{})[pkey(S.term,S.stage,S.week)]||{}; }
+function weekDone(){ if(S.demo) return {}; return store.get(DONE_KEY,{})[pkey(S.term,S.stage,S.week)]||{}; }
 const isPerfect=d=>!!d&&d.total>0&&d.score===d.total;
 function perfectCount(done,term){ return medalActs(term).filter(a=>isPerfect(done[a])).length; }   // switched-on medal activities at 100%
 function medalFromDone(done,term){ return medalFor(perfectCount(done,term),medalActs(term).length); }
 function recordResult(activity,score,total){
+  if(S.demo) return;                                 // teacher view: nothing is saved
   const rec={action:'addResult',id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),timestamp:new Date().toISOString(),
     room:S.room,classNumber:S.classNumber,student:S.student,term:S.term,stage:S.stage,week:S.week,list:(weekData()||{}).l||'',activity,score,total};
   markDone(rec);
@@ -418,9 +419,11 @@ function toast(msg){ document.querySelectorAll('.toast').forEach(x=>x.remove());
 const topbar=$('#topbar');
 $('#tbFrIc').innerHTML=frIcon();
 function updateTopbar(){
-  topbar.classList.toggle('hidden', !(S.role==='student'&&S.student&&S.authed));
-  $('#tbName').textContent=(S.firstName||S.student||'Name')+' ▾';
+  topbar.classList.toggle('hidden', !(S.role==='student'&&S.student&&(S.authed||S.demo)));
+  topbar.classList.toggle('demo', !!S.demo);
+  $('#tbName').textContent=(S.demo?'🍎 Teacher view':(S.firstName||S.student||'Name'))+' ▾';
   $('#tbTerm').textContent='Term '+(S.term||'–')+' ▾';
+  $('#tbStage').textContent='Stage '+(S.stage||'–')+' ▾';
   $('#tbWeek').textContent='Week '+(S.week||'–')+' ▾';
   const n=wallet?wallet.balance:'–';
   $('#tbFrN').textContent=n;
@@ -440,9 +443,9 @@ topbar.addEventListener('click',e=>{
   if(k==='fridge'){ go('fridge'); return; }
   if(wasOpen) return;
   const dd=document.createElement('div'); dd.className='dd';
-  if(k==='name') dd.innerHTML='<button class="logout" style="padding:0 16px">Log Out</button>';
+  if(k==='name') dd.innerHTML=S.demo?'<button class="logout" style="padding:0 16px">Back to teacher page</button>':'<button class="logout" style="padding:0 16px">Log Out</button>';
   else{
-    const range={term:[1,4],week:[1,9]}[k];
+    const range={term:[1,4],week:[1,9],stage:[2,6]}[k];
     for(let i=range[0];i<=range[1];i++){
       dd.insertAdjacentHTML('beforeend','<button data-v="'+i+'" class="'+(S[k]==i?'sel':'')+'">'+i+'</button>');
     }
@@ -450,8 +453,9 @@ topbar.addEventListener('click',e=>{
   dd.addEventListener('click',async ev=>{
     ev.stopPropagation();
     const o=ev.target.closest('button'); if(!o||o.disabled) return;
-    if(o.classList.contains('logout')){ closeDD(); logout(); return; }
+    if(o.classList.contains('logout')){ closeDD(); if(S.demo) exitDemo(); else logout(); return; }
     S[k]=+o.dataset.v; closeDD(); save();
+    if(S.demo){ go(S.term&&S.stage&&S.week?'menu':'demoPick'); return; }
     if(k==='term'){ updateTopbar(); await resolveStage(); }
     go(S.term&&S.stage&&S.stageLocked&&S.week?'menu':'calib');
   });
@@ -607,29 +611,45 @@ SCREENS.teacherLogin=function(){
 /* ---------- teacher ---------- */
 SCREENS.teacherHome=function(msg){
   if(!teacher) return go('teacherLogin');
+  if(S.demo){ S=Object.assign({},BLANK); updateTopbar(); }
   app.innerHTML=`<div class="act-head"><div><div class="crumb">Teacher</div><h2>${esc(teacher.room)}</h2></div><button class="btn small" id="out">Log out</button></div>
   <div class="grid single"><button class="tile" id="setSt"><span class="ic" aria-hidden="true">🗂️</span><span class="nm">Set Student Stages</span></button>
   <button class="tile" id="setActs"><span class="ic" aria-hidden="true">☑️</span><span class="nm">Set Activities</span></button>
   <button class="tile" id="seeProg"><span class="ic" aria-hidden="true">📊</span><span class="nm">See Student Progress</span></button>
-  <button class="tile" id="celeb"><span class="ic" aria-hidden="true">🎉</span><span class="nm">Preview Celebrations</span></button></div>`;
+  <button class="tile" id="stuView"><span class="ic" aria-hidden="true">🖥️</span><span class="nm">Open Student Activities</span></button></div>`;
   $('#out').onclick=()=>{ teacher=null; go('role'); };
   $('#setSt').onclick=()=>go('stagesTerm');
   $('#setActs').onclick=()=>go('actsTerm');
   $('#seeProg').onclick=()=>go('teacherData');
-  $('#celeb').onclick=()=>go('celebPreview');
+  $('#stuView').onclick=()=>go('demoPick');
   if(msg) toast(msg);
 };
-SCREENS.celebPreview=function(){
+/* ---------- teacher: open the student activities (for the smartboard) ----------
+   Every term, stage and week is open, every activity is shown, and nothing is saved to the Google Sheet
+   or the device. The top bar lets the teacher jump to any term, stage or week. */
+function exitDemo(){ stopAll(); S=Object.assign({},BLANK); go(teacher?'teacherHome':'role'); }
+SCREENS.demoPick=function(){
   if(!teacher) return go('teacherLogin');
-  const L=[[1,'Under 100%'],[2,'100%, no new medal'],[3,'Bronze medal'],[4,'Silver medal'],[5,'Gold medal'],[6,'Term trophy'],[7,'Year trophy']];
-  app.innerHTML=`<div class="act-head"><div><div class="crumb">${esc(teacher.room)}</div><h2>Preview celebrations</h2></div><button class="btn small" id="back">Back</button></div>
-  <p class="centre">Tap one to see the pop-up a student gets when they finish an activity. Nothing is saved.</p>
-  <div class="btnrow" id="cp">${L.map(([t,l])=>`<button class="btn" data-t="${t}">${t}. ${l}</button>`).join('')}</div>`;
-  $('#back').onclick=()=>go('teacherHome');
-  $('#cp').onclick=e=>{
-    const b=e.target.closest('[data-t]'); if(!b) return; const t=+b.dataset.t;
-    showCelebration(t,{score:t===1?7:10,total:10,term:3,week:5,n:{1:1,2:3,3:2,4:4,5:6,6:6,7:6}[t],mt:6,fr:{3:FR_PAY.bronze,4:FR_PAY.silver,5:FR_PAY.gold,6:FR_PAY.gold,7:FR_PAY.gold}[t]||0,goldWeeks:t>=6?9:4,name:'Sam'});
-  };
+  if(!S.demo) S=Object.assign({},BLANK,{role:'student',demo:true,room:teacher.room,student:'Teacher',firstName:'Teacher',classNumber:-1});
+  let term=S.term, stage=S.stage, week=S.week;
+  const has=(st,t,w)=>!!(DATA[st]&&DATA[st].weeks[t+'-'+w]);
+  const row=(k,a1,b1,v)=>{ let h=''; for(let i=a1;i<=b1;i++) h+=`<button class="btn ${v==i?'sel':''}" data-k="${k}" data-v="${i}" aria-pressed="${v==i}">${i}</button>`; return h; };
+  function draw(){
+    app.innerHTML=`<div class="act-head"><div><div class="crumb">${esc(teacher.room)}</div><h2>Student activities</h2></div><button class="btn small" id="back">Back to teacher page</button></div>
+    <p class="centre muted" style="margin-top:-4px">Choose any term, stage and week to show on the smartboard. Every activity is open, and nothing is saved.</p>
+    <div class="centre">
+      <div class="cal-group"><h3>Term</h3><div class="btnrow">${row('term',1,4,term)}</div></div>
+      <div class="cal-group"><h3>Stage</h3><div class="btnrow">${row('stage',2,6,stage)}</div></div>
+      <div class="cal-group"><h3>Week</h3><div class="btnrow" id="dWeeks">${row('week',1,9,week)}</div>
+        ${term&&stage&&![1,2,3,4,5,6,7,8,9].some(w=>has(stage,term,w))?`<p class="note">There are no Stage ${stage} lessons for Term ${term} in the PLD teaching sequence.</p>`:''}</div>
+      <div class="tools"><button class="btn primary" id="open" ${term&&stage&&week?'':'disabled'}>Show the activities</button></div>
+    </div>`;
+    if(term&&stage) app.querySelectorAll('#dWeeks button').forEach(b=>{ if(!has(stage,term,+b.dataset.v)) b.classList.add('nolesson'); });
+    $('#back').onclick=exitDemo;
+    app.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ const v=+b.dataset.v; if(b.dataset.k==='term') term=v; else if(b.dataset.k==='stage') stage=v; else week=v; Object.assign(S,{term,stage,week}); updateTopbar(); draw(); });
+    $('#open').onclick=()=>{ Object.assign(S,{term,stage,week,stageLocked:true}); go('menu'); };
+  }
+  updateTopbar(); draw();
 };
 
 /* ---------- teacher: set activities for a term ---------- */
@@ -902,15 +922,20 @@ SCREENS.menu=function(){
       const st=d?(isPerfect(d)?'done':'tried'):'';
       return `<button class="tile ${st}${RESOURCES.includes(id)?' resource':''}${MIDGREY.includes(id)?' midgrey':''}" data-a="${id}" ${!L?'disabled':''}>${d?`<span class="tag ${isPerfect(d)?'ok':'part'}">${isPerfect(d)?'✓ ':''}${d.score}/${d.total}</span>`:''}<span class="ic" aria-hidden="true">${ICONS[id]}</span><span class="nm">${NAMES[id]}</span></button>`; };
     const row=ids=>{ ids=ids.filter(id=>on.includes(id)); return ids.length?`<div class="grid r${ids.length}">${ids.map(tileH).join('')}</div>`:''; };
-    const intro=!w?`<div class="notice">There are no Stage ${S.stage} lessons for Term ${S.term} in the PLD teaching sequence. Tap <b>Term</b> at the top to choose another term, or ask your teacher.</div>`
+    const intro=!w?`<div class="notice">There are no Stage ${S.stage} lessons for Term ${S.term} in the PLD teaching sequence. Tap <b>${S.demo?'Term or Stage':'Term'}</b> at the top to choose another${S.demo?'':' term, or ask your teacher'}.</div>`
+      :S.demo?`<h2 class="wk">Week ${S.week}</h2>
+       <p class="muted" style="margin:0">Stage ${S.stage}, Term ${S.term}${w.l?`, List ${w.l}`:''}</p>
+       <p class="medalkey">Teacher view: every activity is open and nothing is saved.</p>`
       :`<h2 class="wk">Week ${S.week} ${medalHTML(med)}</h2>
        <p class="muted" style="margin:0">Stage ${S.stage}, Term ${S.term}${w.l?`, List ${w.l}`:''}</p>
        <p class="medalkey">${medalRule(medalActs(S.term).length)}</p>`;
-    app.innerHTML=`<div class="intro">${intro}</div>`+MENU_ROWS.map(row).join('');
+    const bonus=w&&(S.demo||med==='gold')&&bonusPool().length;   // the Bonus Zone opens once the week is gold
+    app.innerHTML=(bonus?bonusBtnHTML():'')+`<div class="intro">${intro}</div>`+MENU_ROWS.map(row).join('');
     app.querySelectorAll('.tile').forEach(t=>t.onclick=()=>go(t.dataset.a));
+    const bb=$('#bonusBtn'); if(bb) bb.onclick=()=>go('bonus');
   }
   draw();
-  if(!API.has()) return;
+  if(!API.has()||S.demo) return;
   sync({jitter:true}).then(ok=>{ if(ok) draw(); }).catch(()=>{});
 };
 const TERM_TROPHY={1:'🪐',2:'💫',3:'🔱',4:'⚜️'};
@@ -1115,6 +1140,7 @@ function awardState(){ const n=perfectCount(weekDone(),S.term), mt=medalActs(S.t
 function goldWeeks(){ let c=0; for(let w=1;w<=9;w++) if(weekMedal(S.term,S.stage,w)==='gold') c++; return c; }
 const withTimeout=(p,ms)=>Promise.race([p,new Promise(r=>setTimeout(r,ms))]);
 async function celebrateResult(score,total,before){
+  if(S.demo){ showCelebration(score===total?2:1,{score,total,term:S.term,week:S.week,n:0,mt:0,fr:0,goldWeeks:0,name:'Teacher'}); return; }
   const after=awardState(); let tier=1;
   // Fremantium for reaching a medal for the first time this week (3 bronze, 5 silver, 10 gold)
   const fr=Math.max(0,medalValue(after.medal)-medalValue(before.medal));
@@ -1797,6 +1823,286 @@ function actDictation(){
     }
   }
 }
+
+/* ---------- Bonus Zone ----------
+   Opens once a student has gold for the week they are on (always open in teacher view).
+   Just for fun: nothing here is sent to the Google Sheet. The words come from every list the student
+   has had this year: every week of the earlier terms (in the stage they had that term) and this term
+   up to the week they are on. Speed Spell keeps each student's best score on the iPad only. */
+const LETTERS=/^[A-Za-z]+$/;
+const SPEED_KEY='pldSpell.speedBest.v1', SPEED_SECS=60, HANG_LIVES=6, WG_TRIES=6;
+function bonusOK(){ return S.role==='student'&&!!weekData()&&(S.demo||medalFromDone(weekDone(),S.term)==='gold'); }
+function bonusPool(){
+  const seen=new Set(), out=[];
+  if(!S.term||!S.week) return out;
+  for(let t=1;t<=S.term;t++){
+    const st=(t===S.term||S.demo)?S.stage:stageForTerm(t);
+    if(!st||!DATA[st]) continue;
+    const last=t===S.term?S.week:9;
+    for(let w=1;w<=last;w++){
+      const wk=DATA[st].weeks[t+'-'+w]; if(!wk||!wk.l) continue;
+      const L=DATA[st].lists[wk.l]; if(!L||!L.w) continue;
+      L.w.forEach(x=>{ if(seen.has(x[0])) return; seen.add(x[0]); out.push({w:x[0],x,st}); });
+    }
+  }
+  return out;
+}
+const wordGuessPool=()=>{ const all=bonusPool().filter(p=>LETTERS.test(p.w)); const mid=all.filter(p=>p.w.length>=4&&p.w.length<=8); return mid.length?mid:all; };
+function chunkAt(x,st){ const pal=(DATA[st]||{}).pal||{}; return '<span class="chunk-word">'+x[1].map(([t,c])=>'<span style="color:'+(pal[c]||'#1a1a1a')+'">'+esc(t)+'</span>').join('')+'</span>'; }
+function defFor(w,st){ const i=WORD_INFO[w]||WORD_INFO[w.toLowerCase()]; return (i&&i.d)||((CONTENT[st]||{})[w]||{}).d||''; }
+function sentFor(w,st){ return ((CONTENT[st]||{})[w]||{}).s||''; }
+const bzRecent={};
+function bzPick(game,pool){
+  const r=bzRecent[game]=bzRecent[game]||[];
+  let opts=pool.filter(p=>!r.includes(p.w)); if(!opts.length){ r.length=0; opts=pool; }
+  const p=opts[Math.floor(Math.random()*opts.length)];
+  r.push(p.w); while(r.length>Math.min(15,Math.floor(pool.length/2))) r.shift();
+  return p;
+}
+function speedBest(){ return +(store.get(SPEED_KEY,{})[S.demo?'teacher':walletId()]||0); }
+function setSpeedBest(n){ const m=store.get(SPEED_KEY,{}); m[S.demo?'teacher':walletId()]=n; store.set(SPEED_KEY,m); }
+function bzSnd(kind){
+  const s=SFX.session(0.12); if(!s) return; const t=s.now()+0.02;
+  if(kind==='ok'){ s.tone(76,t,0.12,{type:'triangle',v:0.12}); s.tone(83,t+0.08,0.2,{type:'triangle',v:0.12}); }
+  else if(kind==='bad') s.tone(0,t,0.28,{type:'sawtooth',f:190,to:110,v:0.06});
+  else if(kind==='tick') s.tone(96,t,0.05,{type:'square',v:0.03});
+  setTimeout(()=>s.stop(),1200);
+}
+function funBurst(){
+  const s=SFX.session(0.15); if(s){ playTierMusic(s,2); setTimeout(()=>s.stop(),2500); }
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c=document.createElement('canvas'); c.className='bz-fx'; c.setAttribute('aria-hidden','true'); document.body.appendChild(c);
+  const fx=Fireworks(c);
+  fx.confetti(fx.W/2,fx.H*0.45,120,{speed:[5,13]});
+  fx.confetti(0,fx.H,60,{angle:-Math.PI*0.32,spread:0.5,speed:[12,20]});
+  fx.confetti(fx.W,fx.H,60,{angle:-Math.PI*0.68,spread:0.5,speed:[12,20]});
+  setTimeout(()=>{ fx.stop(); c.remove(); },4500);
+}
+function bonusBtnHTML(){
+  return `<button class="bonus-btn" id="bonusBtn" aria-label="Bonus Zone: fun word games"><span class="bb-ic" aria-hidden="true">⚡</span><span class="bb-tx"><b>BONUS</b><small>ZONE</small></span><span class="bb-ic" aria-hidden="true">⚡</span></button>`;
+}
+function bzHead(title){ return `<div class="act-head"><div><div class="crumb">⚡ Bonus Zone</div><h2>${title}</h2></div><div class="tools" style="margin:0"><button class="btn small" id="toBz"><span aria-hidden="true">⚡</span> Bonus games</button><button class="btn small" id="toMenu">Back to activities</button></div></div>`; }
+function bzWire(){ $('#toBz').onclick=()=>go('bonus'); $('#toMenu').onclick=()=>go('menu'); }
+/* the answer card shown when a round ends: the word in its PLD colours, its meaning and a Hear it button */
+function bzReveal(p){
+  const d=defFor(p.w,p.st);
+  return `<div class="bz-reveal"><div class="bz-rword">${chunkAt(p.x,p.st)}</div>${d?`<p class="bz-rdef">${esc(d)}</p>`:''}<button class="btn small" id="bzHear"><span aria-hidden="true">🔊</span> Hear it</button></div>`;
+}
+
+SCREENS.bonus=function(){
+  if(!bonusOK()) return go(S.role==='student'?'menu':'role');
+  const pool=bonusPool(), wg=wordGuessPool().length, hg=pool.some(p=>/[A-Za-z]/.test(p.w)), best=speedBest();
+  app.innerHTML=`<div class="bz-hero"><div class="bz-bolt" aria-hidden="true">⚡</div><h1 class="bz-title">Bonus Zone</h1>
+    <p class="bz-sub">${S.demo?'Just for fun.':`Gold for Week ${S.week}! These games are just for fun.`} They use all <b>${pool.length}</b> words from ${S.demo?`Stage ${S.stage}, from Term 1 up to Term ${S.term} Week ${S.week}`:'your spelling lists this year'}.</p></div>
+    <div class="bz-games">
+      <button class="bz-game g-hang" data-g="bHang" ${hg?'':'disabled'}><span class="ic" aria-hidden="true">🪢</span><span class="nm">Hangman</span><span class="ds">Guess the letters before the picture is finished.</span></button>
+      <button class="bz-game g-word" data-g="bWord" ${wg?'':'disabled'}><span class="ic" aria-hidden="true">🟩</span><span class="nm">Word Guess</span><span class="ds">Find the secret word in ${WG_TRIES} tries. Green means the right letter in the right spot!</span></button>
+      <button class="bz-game g-speed" data-g="bSpeed"><span class="ic" aria-hidden="true">⏱️</span><span class="nm">Speed Spell</span><span class="ds">How many words can you spell in one minute?${best?`<br><b>Your best: ${best}</b>`:''}</span></button>
+    </div>
+    <div class="tools"><button class="btn" id="back">Back to activities</button></div>`;
+  $('#back').onclick=()=>go('menu');
+  app.querySelectorAll('.bz-game').forEach(b=>b.onclick=()=>go(b.dataset.g));
+};
+
+/* ---------- Bonus: Hangman ---------- */
+SCREENS.bHang=function(){
+  if(!bonusOK()) return go('menu');
+  const pool=bonusPool().filter(p=>/[A-Za-z]/.test(p.w));
+  let cur, guessed, wrong, over, hinted;
+  const letters=()=>new Set(cur.w.toLowerCase().replace(/[^a-z]/g,'').split(''));
+  const won=()=>[...letters()].every(l=>guessed.has(l));
+  function newWord(){ cur=bzPick('hang',pool); guessed=new Set(); wrong=0; over=false; hinted=false; draw(); }
+  function wordHTML(){
+    return [...cur.w].map(ch=>{
+      if(ch===' ') return '<span class="hg-gap"></span>';
+      if(!/[A-Za-z]/.test(ch)) return `<span class="hg-ch fixed">${esc(ch)}</span>`;
+      const got=guessed.has(ch.toLowerCase()), show=got||over;
+      return `<span class="hg-ch${show?' on':''}${over&&!got?' missed':''}">${show?esc(ch):''}</span>`;
+    }).join('');
+  }
+  function pic(){
+    const part=(i,el)=>el.replace('<','<g class="hp'+(i<wrong?' on':'')+'"><').replace(/\/>$/,'/></g>');
+    const lost=over&&!won();
+    return `<svg viewBox="0 0 200 220" class="hg-svg" role="img" aria-label="${wrong} of ${HANG_LIVES} wrong guesses">
+      <g class="hg-frame"><line x1="10" y1="210" x2="160" y2="210"/><line x1="40" y1="210" x2="40" y2="14"/><line x1="40" y1="14" x2="130" y2="14"/><line x1="40" y1="48" x2="74" y2="14"/><line x1="130" y1="14" x2="130" y2="38"/></g>
+      ${part(0,'<circle cx="130" cy="58" r="20"/>')}${part(1,'<line x1="130" y1="78" x2="130" y2="140"/>')}
+      ${part(2,'<line x1="130" y1="95" x2="104" y2="122"/>')}${part(3,'<line x1="130" y1="95" x2="156" y2="122"/>')}
+      ${part(4,'<line x1="130" y1="140" x2="108" y2="182"/>')}${part(5,'<line x1="130" y1="140" x2="152" y2="182"/>')}
+      ${lost?'<g class="hg-face"><path d="M120 50l7 7M127 50l-7 7M133 50l7 7M140 50l-7 7"/><path d="M122 70q8-6 16 0"/></g>':''}
+    </svg>`;
+  }
+  function draw(){
+    const win=over&&won(), left=HANG_LIVES-wrong;
+    app.innerHTML=bzHead('Hangman')+`<div class="hg">
+      <div class="hg-pic">${pic()}<div class="hg-lives"><span aria-hidden="true">${'❤️'.repeat(left)}${'🤍'.repeat(wrong)}</span><span class="sr">${left} lives left</span></div></div>
+      <div class="hg-main">
+        <div class="hg-word" aria-label="Secret word, ${cur.w.length} characters">${wordHTML()}</div>
+        <p class="hg-msg ${win?'good':over?'bad':''}" role="status">${win?'🎉 You got it!':over?'Out of lives! The word was:':`Tap a letter. ${[...letters()].filter(l=>!guessed.has(l)).length} more different letter${[...letters()].filter(l=>!guessed.has(l)).length===1?'':'s'} to find.`}</p>
+        ${over?bzReveal(cur):`<div class="hg-keys">${'abcdefghijklmnopqrstuvwxyz'.split('').map(l=>{ const g=guessed.has(l); return `<button class="hk${g?(letters().has(l)?' hit':' miss'):''}" data-l="${l}" ${g?'disabled':''} aria-label="${l}">${l}</button>`; }).join('')}</div>`}
+        ${hinted&&!over?`<p class="bz-hint"><b>Hint:</b> ${esc(defFor(cur.w,cur.st)||'There is no hint for this word.')}</p>`:''}
+        <div class="tools">${over?'<button class="btn primary" id="again">Next word</button>':`<button class="btn small" id="hint" ${hinted?'disabled':''}><span aria-hidden="true">💡</span> Hint</button>`}</div>
+      </div></div>`;
+    bzWire();
+    if(over){ $('#again').onclick=newWord; $('#bzHear').onclick=()=>speak(cur.w); }
+    else{
+      $('#hint').onclick=()=>{ hinted=true; draw(); };
+      app.querySelector('.hg-keys').onclick=e=>{
+        const b=e.target.closest('[data-l]'); if(!b||b.disabled) return;
+        const l=b.dataset.l; guessed.add(l);
+        if(letters().has(l)) bzSnd('ok'); else { wrong++; bzSnd('bad'); }
+        if(won()){ over=true; funBurst(); } else if(wrong>=HANG_LIVES) over=true;
+        draw();
+      };
+    }
+  }
+  newWord();
+};
+
+/* ---------- Bonus: Word Guess (like Wordle) ---------- */
+SCREENS.bWord=function(){
+  if(!bonusOK()) return go('menu');
+  const pool=wordGuessPool();
+  if(!pool.length) return go('bonus');
+  let cur, ans, len, rows, typed, over, keys, hinted, msg, justRow;
+  const RANK={correct:3,present:2,absent:1};
+  function newWord(){ cur=bzPick('word',pool); ans=cur.w.toLowerCase(); len=ans.length; rows=[]; typed=''; over=false; keys={}; hinted=false; msg=''; justRow=-1; draw(); }
+  function mark(g){
+    const res=Array(len).fill('absent'), left={};
+    for(let i=0;i<len;i++){ if(g[i]===ans[i]) res[i]='correct'; else left[ans[i]]=(left[ans[i]]||0)+1; }
+    for(let i=0;i<len;i++) if(res[i]!=='correct'&&left[g[i]]>0){ res[i]='present'; left[g[i]]--; }
+    return res;
+  }
+  function grid(){
+    let h='';
+    for(let r=0;r<WG_TRIES;r++){
+      const done=rows[r], live=!over&&r===rows.length;
+      h+=`<div class="wg-row${live?' live':''}">`;
+      for(let i=0;i<len;i++){
+        const ch=done?done.g[i]:live?(typed[i]||''):'';
+        const cls=done?' '+done.r[i]+(r===justRow?' flip':''):(ch?' typed':'');
+        h+=`<div class="wg-t${cls}" style="${r===justRow?`animation-delay:${i*0.12}s`:''}">${esc(ch)}</div>`;
+      }
+      h+='</div>';
+    }
+    return h;
+  }
+  function kb(){
+    const rowsK=['qwertyuiop','asdfghjkl','+zxcvbnm-'];
+    return `<div class="wg-kb">${rowsK.map(r=>`<div class="wg-kr">${r.split('').map(k=>k==='+'?'<button class="wgk wide" data-k="enter">Enter</button>':k==='-'?'<button class="wgk wide" data-k="back" aria-label="Delete">⌫</button>':`<button class="wgk ${keys[k]||''}" data-k="${k}">${k}</button>`).join('')}</div>`).join('')}</div>`;
+  }
+  function draw(){
+    const win=over&&rows.length&&rows[rows.length-1].g===ans;
+    app.innerHTML=bzHead('Word Guess')+`<p class="centre muted" style="margin-top:-6px">The secret word has <b>${len}</b> letters.<br><span class="sw correct"></span> right letter, right spot · <span class="sw present"></span> in the word, wrong spot · <span class="sw absent"></span> not in the word</p>
+      <div class="wg-grid" style="--n:${len}">${grid()}</div>
+      <p class="hg-msg ${win?'good':over?'bad':''}" id="wgMsg" role="status">${win?`🎉 Got it in ${rows.length}!`:over?'Out of tries! The word was:':esc(msg)}</p>
+      ${over?bzReveal(cur):kb()}
+      ${hinted&&!over?`<p class="bz-hint"><b>Hint:</b> ${esc(defFor(cur.w,cur.st)||'There is no hint for this word.')}</p>`:''}
+      <div class="tools">${over?'<button class="btn primary" id="again">Next word</button>':`<button class="btn small" id="hint" ${hinted?'disabled':''}><span aria-hidden="true">💡</span> Hint</button>`}</div>`;
+    bzWire(); justRow=-1;
+    if(over){ $('#again').onclick=newWord; $('#bzHear').onclick=()=>speak(cur.w); return; }
+    $('#hint').onclick=()=>{ hinted=true; draw(); };
+    app.querySelector('.wg-kb').addEventListener('pointerdown',e=>{
+      const b=e.target.closest('[data-k]'); if(!b) return; e.preventDefault(); press(b.dataset.k);
+    });
+  }
+  function shake(){ const r=app.querySelector('.wg-row.live'); if(!r) return; r.classList.remove('shake'); void r.offsetWidth; r.classList.add('shake'); }
+  function press(k){
+    if(over) return;
+    if(k==='back'){ typed=typed.slice(0,-1); msg=''; }
+    else if(k==='enter'){
+      if(typed.length<len){ msg=`Type all ${len} letters first.`; $('#wgMsg').textContent=msg; shake(); return; }
+      const r=mark(typed); rows.push({g:typed,r}); justRow=rows.length-1;
+      [...typed].forEach((c,i)=>{ if((RANK[r[i]]||0)>(RANK[keys[c]]||0)) keys[c]=r[i]; });
+      typed=''; msg='';
+      if(r.every(x=>x==='correct')){ over=true; timers.push(setTimeout(funBurst,len*120+250)); }
+      else if(rows.length>=WG_TRIES){ over=true; bzSnd('bad'); }
+    }
+    else if(typed.length<len){ typed+=k; msg=''; }
+    draw();
+  }
+  newWord();
+};
+
+/* ---------- Bonus: Speed Spell (one minute) ---------- */
+SCREENS.bSpeed=function(){
+  if(!bonusOK()) return go('menu');
+  const pool=bonusPool();
+  let order=[], oi=0, cur=null, score=0, log=[], end=0, f=null, iv=null, lastSec=SPEED_SECS;
+  function intro(){
+    const best=speedBest();
+    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-intro"><div class="sp-big" aria-hidden="true">⏱️</div>
+      <p>Listen to each word, then spell it. You have <b>1 minute</b>.<br>How many can you get right?</p>
+      ${best?`<p class="sp-best">Your best: <b>${best}</b></p>`:''}
+      <button class="btn primary big-audio" id="go">Start!</button>
+      <p class="muted" style="margin-top:14px">Tap 🔊 to hear a word again. Tap Skip if you're stuck.</p></div>`;
+    bzWire();
+    $('#go').onclick=()=>{ speak('Get ready!'); countdown(); };   // speaking inside the tap lets the iPad talk later
+  }
+  function countdown(){
+    let n=3;
+    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-count" id="cd" aria-live="assertive">${n}</div>`; bzWire();
+    const t=setInterval(()=>{
+      n--; const cd=$('#cd'); if(!cd){ clearInterval(t); return; }
+      if(n>0){ cd.textContent=n; bzSnd('tick'); }
+      else if(n===0){ cd.textContent='Go!'; cd.classList.add('go'); }
+      else { clearInterval(t); play(); }
+    },800);
+    timers.push(t); bzSnd('tick');
+  }
+  function play(){
+    order=shuffle(pool); oi=0; score=0; log=[]; lastSec=SPEED_SECS;
+    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-top"><div class="sp-timer" id="tm" aria-label="Seconds left">${SPEED_SECS}</div><div class="sp-score">✓ <b id="sc">0</b></div></div>
+      <p class="sp-fb" id="fb" role="status"></p>
+      <div class="qcard sp-card">
+        <button class="btn big-audio" id="hear"><span aria-hidden="true">🔊</span> Hear it again</button>
+        <p class="sp-sent" id="sent"></p>
+        <div class="answer"><div id="ansf"></div></div>
+        <div class="tools"><button class="btn" id="skip">Skip ⏭</button><button class="btn primary" id="sub">Check ✓</button></div>
+      </div>`;
+    bzWire();
+    f=answerField($('#ansf'),{label:'Spell the word',placeholder:'Type the word',onEnter:submit});
+    $('#hear').onclick=()=>{ if(cur) speak(cur.w); };
+    $('#sub').onclick=submit; $('#skip').onclick=skip;
+    end=performance.now()+SPEED_SECS*1000;
+    iv=setInterval(tick,200); timers.push(iv);
+    next();
+  }
+  function tick(){
+    const left=Math.max(0,Math.ceil((end-performance.now())/1000)), tm=$('#tm'); if(!tm) return;
+    if(left!==lastSec){ lastSec=left; tm.textContent=left; tm.classList.toggle('hurry',left<=10); if(left<=5&&left>0) bzSnd('tick'); }
+    if(left<=0) finish();
+  }
+  function next(){
+    if(oi>=order.length){ order=shuffle(pool); oi=0; }
+    cur=order[oi++]; f.set('');
+    const s=sentFor(cur.w,cur.st);
+    $('#sent').innerHTML=s?`<span class="muted">Clue:</span> ${esc(s).replace('___','<span class="blank">&nbsp;</span>')}`:'';
+    speak(cur.w);
+  }
+  function submit(){
+    if(!cur||!f) return;
+    const val=f.value.trim(); if(!val) return;
+    const ok=same(val,cur.w); log.push({p:cur,given:val,ok});
+    if(ok){ score++; $('#sc').textContent=score; bzSnd('ok'); $('#fb').className='sp-fb good'; $('#fb').innerHTML='✓ Correct!'; }
+    else { bzSnd('bad'); $('#fb').className='sp-fb bad'; $('#fb').innerHTML=`✗ It's spelt ${chunkAt(cur.x,cur.st)}`; }
+    next();
+  }
+  function skip(){ if(!cur) return; log.push({p:cur,given:'',ok:false}); $('#fb').className='sp-fb'; $('#fb').innerHTML=`Skipped: ${chunkAt(cur.x,cur.st)}`; next(); }
+  function finish(){
+    clearInterval(iv); KB.hide(); stopSpeech(); cur=null;
+    const best=speedBest(), isBest=score>best;
+    if(isBest) setSpeedBest(score);
+    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-done"><div class="sp-big" aria-hidden="true">${isBest?'🏆':'⏱️'}</div>
+      <h3>Time's up!</h3><div class="sp-final"><b>${score}</b> correct in 1 minute</div>
+      <p class="sp-best">${isBest?(best?`New best! Your old best was ${best}.`:'Your first score!'):best?`Your best: <b>${best}</b>`:'Have another go!'}</p></div>
+      ${log.length?`<div class="tbl-wrap"><table class="fbt"><thead><tr><th scope="col"><span class="sr">Result</span></th><th scope="col">Your answer</th><th scope="col">Correct answer</th></tr></thead><tbody>
+      ${log.map(r=>`<tr class="${r.ok?'ok':'bad'}"><td class="mk">${r.ok?'✓':'✗'}</td><td class="given">${r.given?esc(r.given):'<span class="muted">(skipped)</span>'}</td><td>${chunkAt(r.p.x,r.p.st)}</td></tr>`).join('')}</tbody></table></div>`:''}
+      <div class="tools"><button class="btn primary" id="again">Play again</button></div>`;
+    bzWire(); $('#again').onclick=intro;
+    if(isBest&&score>0) funBurst();
+  }
+  intro();
+};
 
 /* ---------- activity registry ---------- */
 const ACTS={

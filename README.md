@@ -19,6 +19,25 @@ Spelling activities for PLD Stages 2–6: word list (tap a word for its pop-up),
 
 `apps-script/Code.gs` is the Google Apps Script. **Don't upload it to GitHub**: once your teacher password is in it, it belongs only in the Google Sheet (Extensions → Apps Script).
 
+## Open Student Activities (teacher, for the smartboard)
+
+Teacher → **Open Student Activities** opens the pages students see, with everything unlocked:
+
+- Choose any **term**, **stage** and **week**, then **Show the activities**. Every activity is shown, even ones switched off in Set Activities.
+- The top bar shows **Teacher view ▾ / Term ▾ / Stage ▾ / Week ▾**, so you can jump anywhere. **Teacher view ▾ → Back to teacher page** returns to the teacher menu.
+- Nothing is saved: results don't go to the Google Sheet or the device, there are no medals or Fremantium, and the Supermarket, Fridge and Progress buttons are hidden.
+- The **Bonus Zone** button is always there in teacher view. Its games use every word in the chosen stage from Term 1 up to the chosen week.
+
+## Bonus Zone
+
+When a student gets **gold** for a week, a flashing **⚡ BONUS ZONE ⚡** button appears in the top right of that week's activities page. The games are just for fun and use every word from every list the student has had this year: all 9 weeks of earlier terms (in the stage they had that term) plus this term up to the week they're on.
+
+- **Hangman**: tap letters to find the word before the picture is finished (6 lives). 💡 Hint shows the definition.
+- **Word Guess**: like Wordle. Find the secret word (4 to 8 letters, letters only) in 6 tries; green is the right letter in the right spot, yellow is in the word but in the wrong spot. 💡 Hint shows the definition.
+- **Speed Spell**: the iPad says a word (with the cloze sentence as a clue) and the student spells it on the on-screen keyboard. How many correct in one minute? Each student's best score is kept on that iPad only.
+
+Bonus games don't send anything to the Google Sheet and don't earn medals or Fremantium.
+
 ## Word pop-up
 
 In **Word List**, a student taps a word to hear it and open its pop-up. The pop-up shows the word (in its PLD colours) with emojis, then Definition, Part of Speech, Synonyms, Antonyms, Root, Word family and Prefixes and Suffixes. Anything that doesn't apply shows **n/a**. The pop-up scrolls on its own if it is taller than the screen, and closes with ✕, **Close** or a tap outside it.

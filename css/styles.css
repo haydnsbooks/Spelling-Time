@@ -738,3 +738,83 @@ button.plate{display:inline-flex;align-items:center;justify-content:center;text-
 .sw{display:inline-block;width:18px;height:18px;border-radius:4px;vertical-align:-3px}
 .sw.correct{background:#3fa34d}.sw.present{background:#e8b923}.sw.absent{background:#7c8496}
 @media (max-height:820px){.wgk{height:48px}.wg-kb{gap:5px;margin-top:6px}.wg-grid~.hg-msg{min-height:26px;margin:6px 0 2px}}
+
+/* ===== v12: Spellsa, Ice Blocks, Let it Go ===== */
+:root{--powder:#b0e0e6;--powder-deep:#7fbac4;--cyan:#22d3ee;--cyan-deep:#0e9fb5;--snow:#fffafa}
+.bz-game.g-hang{background:linear-gradient(160deg,#6aa2e0,#3a5fa8)}
+.bz-game.g-word{background:linear-gradient(160deg,#1fb3cf,#0e6f8a)}
+.bz-game.g-speed{background:linear-gradient(160deg,#5b8fd6,#1b2a66)}
+
+/* Spellsa */
+.sp-pic{background:linear-gradient(180deg,#eaf6fd,#fff 70%)}
+.sp-part{opacity:.07;transition:opacity .3s}
+.sp-part.on{opacity:1}
+.sp-part.on.new{animation:sp-in .45s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes sp-in{0%{transform:translateY(-6px);opacity:0}100%{transform:none;opacity:1}}
+.sp-svg *{stroke-linecap:round;stroke-linejoin:round}
+.sp-svg .sp-snow{fill:#f4fbff;stroke:#cfe6f3;stroke-width:2}
+.sp-svg .sp-skin{fill:#f6d7c3;stroke:#c99a7d;stroke-width:2}
+.sp-svg .sp-hair,.sp-svg .sp-fringe{fill:#f3d36b;stroke:#c9a53a;stroke-width:2}
+.sp-svg .sp-dress{fill:var(--powder);stroke:#5f9aa6;stroke-width:2.5}
+.sp-svg .sp-trim{fill:none;stroke:#e9f8fb;stroke-width:3}
+.sp-svg .sp-arm{fill:none;stroke:#f6d7c3;stroke-width:7}
+.sp-svg .sp-shoe{fill:#7fb9c4;stroke:#4f8a96;stroke-width:2}
+.sp-svg .sp-face circle{fill:var(--ink)}
+.sp-svg .sp-face .sp-blush{fill:#f7b7b0;opacity:.7}
+.sp-svg .sp-face .sp-line{fill:none;stroke:var(--ink);stroke-width:2.2}
+.sp-svg .sp-face .sp-tear{fill:#7cc4ea;stroke:none}
+.hg-lives{letter-spacing:1px}
+
+/* Ice Blocks */
+.wg-grid.ice .wg-t{border-color:#cdd3da;background:linear-gradient(160deg,#f1f3f6,#e2e6eb);box-shadow:inset 0 2px 0 rgba(255,255,255,.8)}
+.wg-grid.ice .wg-row.live .wg-t{border-color:#9aa4b2}
+.wg-grid.ice .wg-t.typed{border-color:var(--ink);background:#fff}
+.wg-grid.ice .wg-t.absent{background:var(--snow);border-color:#d5dde5;color:#8b94a6;box-shadow:inset 0 -3px 0 #e8edf2}
+.wg-grid.ice .wg-t.present{background:linear-gradient(160deg,#d7f1f4,var(--powder));border-color:var(--powder-deep);color:var(--ink);box-shadow:inset 0 2px 0 rgba(255,255,255,.7)}
+.wg-grid.ice .wg-t.correct{background:linear-gradient(160deg,#7ae8f7,var(--cyan));border-color:var(--cyan-deep);color:var(--ink);box-shadow:inset 0 2px 0 rgba(255,255,255,.6)}
+.wg-grid.ice .wg-t.flip{animation:ice-flip .5s ease-in both}
+@keyframes ice-flip{0%{transform:rotateX(0);background:#fff;color:var(--ink);border-color:var(--ink)}49%{background:#fff;color:var(--ink);border-color:var(--ink)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+.wg-kb .wgk{background:#e9ecf1}
+.wg-kb .wgk.wide{background:#eef1f7}
+.wg-kb .wgk.absent{background:var(--snow);border-color:#cfd6de;color:#b4bcc8;box-shadow:none}
+.wg-kb .wgk.present{background:var(--powder);border-color:var(--powder-deep);color:var(--ink)}
+.wg-kb .wgk.correct{background:var(--cyan);border-color:var(--cyan-deep);color:var(--ink)}
+.sw.correct{background:var(--cyan);border:1px solid var(--cyan-deep)}
+.sw.present{background:var(--powder);border:1px solid var(--powder-deep)}
+.sw.absent{background:var(--snow);border:1px solid #c9d0d9}
+
+/* Let it Go */
+.lig-wrap{display:grid;gap:14px;max-width:880px;margin:0 auto}
+.lig-wrap.intro,.lig-wrap.done{grid-template-columns:minmax(0,320px) 1fr;align-items:center}
+.lig-wrap.play{grid-template-columns:minmax(0,300px) 1fr;align-items:start}
+.lig-scene{position:relative;height:380px;border:3px solid var(--ink);border-radius:18px;overflow:hidden;box-shadow:3px 4px 0 var(--ink);background:#8fd3ff}
+.lig-wrap.play .lig-scene{height:340px}
+.lig-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.lig-hud{position:absolute;left:8px;right:8px;top:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none}
+.lig-time{font-family:var(--display);font-weight:800;font-size:34px;line-height:1;background:rgba(255,255,255,.92);border:3px solid var(--ink);border-radius:14px;padding:6px 12px;min-width:76px;text-align:center;box-shadow:2px 3px 0 var(--ink)}
+.lig-time::after{content:"s";font-size:18px;margin-left:2px;color:var(--ink-soft)}
+.lig-time.hurry{background:var(--bad-bg);color:var(--bad);animation:cel-throb .9s ease-in-out infinite}
+.lig-alt{display:grid;gap:4px;justify-items:end}
+.lig-best,.lig-now{background:rgba(255,255,255,.92);border:2px solid var(--ink);border-radius:10px;padding:2px 10px;font-size:15px;line-height:1.3;white-space:nowrap}
+.lig-best b,.lig-now b{font-family:var(--display);font-weight:800;font-size:19px}
+.lig-best{color:var(--ink-soft)}
+.lig-best.beaten{background:#fff4c2;color:#8a6200}
+.lig-now b{font-size:24px;color:var(--edit)}
+.lig-float{position:absolute;left:50%;top:46%;transform:translateX(-50%);font-family:var(--display);font-weight:800;font-size:30px;text-shadow:2px 2px 0 #fff;pointer-events:none;animation:lig-float 1.2s ease-out both}
+.lig-float.up{color:var(--ok)}.lig-float.down{color:var(--bad)}
+@keyframes lig-float{0%{opacity:0;transform:translate(-50%,10px)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-60px)}}
+.lig-bar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.lig-title{font-family:var(--display);font-weight:800;font-size:26px}
+.lig-side .sp-card{margin-top:0}
+.lig-side .sp-fb{min-height:34px}
+.lig-rules{list-style:none;padding:0;margin:0 auto 12px;display:inline-grid;gap:4px;text-align:left;font-size:19px}
+.sp-intro .sp-count{margin:20px 0;font-size:clamp(64px,12vw,120px)}
+.sp-intro .sp-count.go{font-size:clamp(40px,7vw,64px)}
+.btn small{font-size:.75em;font-weight:400}
+@media (max-width:760px){
+  .lig-wrap.intro,.lig-wrap.done,.lig-wrap.play{grid-template-columns:1fr}
+  .lig-scene,.lig-wrap.play .lig-scene{height:230px}
+  .lig-time{font-size:28px}
+}
+@media (max-height:820px) and (min-width:761px){.lig-wrap.play .lig-scene{height:300px}}
+.lig-float.space{font-size:34px;color:#fff;text-shadow:2px 2px 0 #1b2a66}

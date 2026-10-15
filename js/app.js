@@ -15,8 +15,8 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-10-15.1';
-const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js'];
+const APP_VERSION = '2026-10-15.2';
+const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js','data/dictionary.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
   try{
@@ -1828,9 +1828,12 @@ function actDictation(){
    Opens once a student has gold for the week they are on (always open in teacher view).
    Just for fun: nothing here is sent to the Google Sheet. The words come from every list the student
    has had this year: every week of the earlier terms (in the stage they had that term) and this term
-   up to the week they are on. Speed Spell keeps each student's best score on the iPad only. */
+   up to the week they are on. Let it Go keeps each student's highest balloon on the iPad only.
+   The three games: Spellsa (guess the letters), Ice Blocks (like Wordle) and Let it Go (speed spelling). */
 const LETTERS=/^[A-Za-z]+$/;
-const SPEED_KEY='pldSpell.speedBest.v1', SPEED_SECS=60, HANG_LIVES=6, WG_TRIES=6;
+const HANG_LIVES=6, WG_TRIES=6;
+const LIG_KEY='pldSpell.letItGoBest.v1';
+const LIG={START:60, BONUS:3, SKIP:3, MIN_LEN:3, CLIMB:10, BOOST:20, PX:4};   // seconds, seconds, seconds, letters, metres a second, metres per correct word, pixels a metre
 function bonusOK(){ return S.role==='student'&&!!weekData()&&(S.demo||medalFromDone(weekDone(),S.term)==='gold'); }
 function bonusPool(){
   const seen=new Set(), out=[];
@@ -1859,14 +1862,30 @@ function bzPick(game,pool){
   r.push(p.w); while(r.length>Math.min(15,Math.floor(pool.length/2))) r.shift();
   return p;
 }
-function speedBest(){ return +(store.get(SPEED_KEY,{})[S.demo?'teacher':walletId()]||0); }
-function setSpeedBest(n){ const m=store.get(SPEED_KEY,{}); m[S.demo?'teacher':walletId()]=n; store.set(SPEED_KEY,m); }
+function ligBest(){ return +(store.get(LIG_KEY,{})[S.demo?'teacher':walletId()]||0); }
+function setLigBest(n){ const m=store.get(LIG_KEY,{}); m[S.demo?'teacher':walletId()]=n; store.set(LIG_KEY,m); }
+const fmtM=n=>Math.floor(n).toLocaleString('en-AU')+' m';
+/* real words for Ice Blocks: the dictionary in data/dictionary.js plus every PLD list word */
+let realWords=null;
+function isRealWord(w){
+  w=String(w).toLowerCase();
+  if(!realWords){
+    realWords=new Set();
+    const D=window.WORD_DICT||{};
+    Object.keys(D).forEach(k=>{ const n=+k, s=D[k]; if(n>0&&typeof s==='string') for(let i=0;i+n<=s.length;i+=n) realWords.add(s.slice(i,i+n)); });
+    (D.EXTRA||[]).forEach(x=>realWords.add(String(x).toLowerCase()));
+    Object.keys(DATA).forEach(st=>Object.values(DATA[st].lists||{}).forEach(L=>(L.w||[]).forEach(x=>realWords.add(String(x[0]).toLowerCase()))));
+  }
+  return realWords.has(w);
+}
 function bzSnd(kind){
   const s=SFX.session(0.12); if(!s) return; const t=s.now()+0.02;
   if(kind==='ok'){ s.tone(76,t,0.12,{type:'triangle',v:0.12}); s.tone(83,t+0.08,0.2,{type:'triangle',v:0.12}); }
   else if(kind==='bad') s.tone(0,t,0.28,{type:'sawtooth',f:190,to:110,v:0.06});
   else if(kind==='tick') s.tone(96,t,0.05,{type:'square',v:0.03});
-  setTimeout(()=>s.stop(),1200);
+  else if(kind==='skip') s.tone(0,t,0.22,{type:'triangle',f:420,to:260,v:0.07});
+  else if(kind==='whoosh'){ s.whoosh(t,0.9,0.16); s.bell(84,t+0.1,0.06,0.8); s.bell(91,t+0.25,0.05,0.8); }
+  setTimeout(()=>s.stop(),1500);
 }
 function funBurst(){
   const s=SFX.session(0.15); if(s){ playTierMusic(s,2); setTimeout(()=>s.stop(),2500); }
@@ -1891,20 +1910,21 @@ function bzReveal(p){
 
 SCREENS.bonus=function(){
   if(!bonusOK()) return go(S.role==='student'?'menu':'role');
-  const pool=bonusPool(), wg=wordGuessPool().length, hg=pool.some(p=>/[A-Za-z]/.test(p.w)), best=speedBest();
+  const pool=bonusPool(), wg=wordGuessPool().length, hg=pool.some(p=>/[A-Za-z]/.test(p.w)), best=ligBest();
   app.innerHTML=`<div class="bz-hero"><div class="bz-bolt" aria-hidden="true">⚡</div><h1 class="bz-title">Bonus Zone</h1>
     <p class="bz-sub">${S.demo?'Just for fun.':`Gold for Week ${S.week}! These games are just for fun.`} They use all <b>${pool.length}</b> words from ${S.demo?`Stage ${S.stage}, from Term 1 up to Term ${S.term} Week ${S.week}`:'your spelling lists this year'}.</p></div>
     <div class="bz-games">
-      <button class="bz-game g-hang" data-g="bHang" ${hg?'':'disabled'}><span class="ic" aria-hidden="true">🪢</span><span class="nm">Hangman</span><span class="ds">Guess the letters before the picture is finished.</span></button>
-      <button class="bz-game g-word" data-g="bWord" ${wg?'':'disabled'}><span class="ic" aria-hidden="true">🟩</span><span class="nm">Word Guess</span><span class="ds">Find the secret word in ${WG_TRIES} tries. Green means the right letter in the right spot!</span></button>
-      <button class="bz-game g-speed" data-g="bSpeed"><span class="ic" aria-hidden="true">⏱️</span><span class="nm">Speed Spell</span><span class="ds">How many words can you spell in one minute?${best?`<br><b>Your best: ${best}</b>`:''}</span></button>
+      <button class="bz-game g-hang" data-g="bHang" ${hg?'':'disabled'}><span class="ic" aria-hidden="true">👗</span><span class="nm">Spellsa</span><span class="ds">Guess the letters before Spellsa is finished. You have ${HANG_LIVES} lives.</span></button>
+      <button class="bz-game g-word" data-g="bWord" ${wg?'':'disabled'}><span class="ic" aria-hidden="true">🧊</span><span class="nm">Ice Blocks</span><span class="ds">Find the secret word in ${WG_TRIES} tries, guessing real words. Cyan means the right letter in the right spot!</span></button>
+      <button class="bz-game g-speed" data-g="bSpeed"><span class="ic" aria-hidden="true">🎈</span><span class="nm">Let it Go</span><span class="ds">Spell words to keep your balloon climbing. Every correct word adds ${LIG.BONUS} seconds!${best?`<br><b>Your highest: ${fmtM(best)}</b>`:''}</span></button>
     </div>
     <div class="tools"><button class="btn" id="back">Back to activities</button></div>`;
   $('#back').onclick=()=>go('menu');
   app.querySelectorAll('.bz-game').forEach(b=>b.onclick=()=>go(b.dataset.g));
 };
 
-/* ---------- Bonus: Hangman ---------- */
+/* ---------- Bonus: Spellsa (guess the letters) ----------
+   Each wrong letter draws one more part of the picture: head, hair, dress, left arm, right arm, shoes. */
 SCREENS.bHang=function(){
   if(!bonusOK()) return go('menu');
   const pool=bonusPool().filter(p=>/[A-Za-z]/.test(p.w));
@@ -1921,20 +1941,26 @@ SCREENS.bHang=function(){
     }).join('');
   }
   function pic(){
-    const part=(i,el)=>el.replace('<','<g class="hp'+(i<wrong?' on':'')+'"><').replace(/\/>$/,'/></g>');
     const lost=over&&!won();
-    return `<svg viewBox="0 0 200 220" class="hg-svg" role="img" aria-label="${wrong} of ${HANG_LIVES} wrong guesses">
-      <g class="hg-frame"><line x1="10" y1="210" x2="160" y2="210"/><line x1="40" y1="210" x2="40" y2="14"/><line x1="40" y1="14" x2="130" y2="14"/><line x1="40" y1="48" x2="74" y2="14"/><line x1="130" y1="14" x2="130" y2="38"/></g>
-      ${part(0,'<circle cx="130" cy="58" r="20"/>')}${part(1,'<line x1="130" y1="78" x2="130" y2="140"/>')}
-      ${part(2,'<line x1="130" y1="95" x2="104" y2="122"/>')}${part(3,'<line x1="130" y1="95" x2="156" y2="122"/>')}
-      ${part(4,'<line x1="130" y1="140" x2="108" y2="182"/>')}${part(5,'<line x1="130" y1="140" x2="152" y2="182"/>')}
-      ${lost?'<g class="hg-face"><path d="M120 50l7 7M127 50l-7 7M133 50l7 7M140 50l-7 7"/><path d="M122 70q8-6 16 0"/></g>':''}
+    const g=(i,inner)=>`<g class="sp-part${i<wrong?' on':''}${i===wrong-1?' new':''}">${inner}</g>`;
+    const face=lost
+      ? '<g class="sp-face"><circle cx="93" cy="54" r="2.2"/><circle cx="107" cy="54" r="2.2"/><path class="sp-line" d="M93 67q7-6 14 0"/><path class="sp-tear" d="M107 59q-2 4 0 6q2-2 0-6z"/></g>'
+      : '<g class="sp-face"><circle cx="93" cy="54" r="2.2"/><circle cx="107" cy="54" r="2.2"/><path class="sp-line" d="M93 63q7 6 14 0"/><circle class="sp-blush" cx="88" cy="61" r="3.5"/><circle class="sp-blush" cx="112" cy="61" r="3.5"/></g>';
+    // drawn back to front: hair sits behind the head and dress, so it comes first in the picture
+    return `<svg viewBox="0 0 200 220" class="hg-svg sp-svg" role="img" aria-label="${wrong} of ${HANG_LIVES} wrong guesses">
+      <ellipse class="sp-snow" cx="100" cy="206" rx="86" ry="11"/>
+      ${g(1,'<path class="sp-hair" d="M78 56c-4-22 9-36 22-36s26 14 22 36c2 14 4 26 9 36c-10 5-22 4-31-2c-9 6-21 7-31 2c5-10 7-22 9-36z"/>')}
+      ${g(3,'<path class="sp-arm" d="M88 84q-14 18-18 42"/><circle class="sp-skin" cx="70" cy="128" r="5"/>')}
+      ${g(4,'<path class="sp-arm" d="M112 84q14 18 18 42"/><circle class="sp-skin" cx="130" cy="128" r="5"/>')}
+      ${g(5,'<ellipse class="sp-shoe" cx="91" cy="196" rx="9" ry="5"/><ellipse class="sp-shoe" cx="109" cy="196" rx="9" ry="5"/>')}
+      ${g(2,'<path class="sp-dress" d="M88 78h24l-4 34l26 80h-68l26-80z"/><path class="sp-trim" d="M92 112h16M70 186h60"/><rect class="sp-skin" x="96" y="70" width="8" height="10" rx="3"/>')}
+      ${g(0,'<circle class="sp-skin sp-head" cx="100" cy="56" r="19"/>'+face+'<path class="sp-fringe" d="M81 52c2-14 10-21 19-21s17 7 19 21c-6-6-12-9-19-9s-13 3-19 9z" style="opacity:'+(wrong>1?1:0)+'"/>')}
     </svg>`;
   }
   function draw(){
     const win=over&&won(), left=HANG_LIVES-wrong;
-    app.innerHTML=bzHead('Hangman')+`<div class="hg">
-      <div class="hg-pic">${pic()}<div class="hg-lives"><span aria-hidden="true">${'❤️'.repeat(left)}${'🤍'.repeat(wrong)}</span><span class="sr">${left} lives left</span></div></div>
+    app.innerHTML=bzHead('Spellsa')+`<div class="hg">
+      <div class="hg-pic sp-pic">${pic()}<div class="hg-lives"><span aria-hidden="true">${'💙'.repeat(left)}${'🤍'.repeat(wrong)}</span><span class="sr">${left} lives left</span></div></div>
       <div class="hg-main">
         <div class="hg-word" aria-label="Secret word, ${cur.w.length} characters">${wordHTML()}</div>
         <p class="hg-msg ${win?'good':over?'bad':''}" role="status">${win?'🎉 You got it!':over?'Out of lives! The word was:':`Tap a letter. ${[...letters()].filter(l=>!guessed.has(l)).length} more different letter${[...letters()].filter(l=>!guessed.has(l)).length===1?'':'s'} to find.`}</p>
@@ -1958,7 +1984,9 @@ SCREENS.bHang=function(){
   newWord();
 };
 
-/* ---------- Bonus: Word Guess (like Wordle) ---------- */
+/* ---------- Bonus: Ice Blocks (like Wordle) ----------
+   Every guess must be a real word (data/dictionary.js or any spelling list word), not a mash of letters.
+   Snow white = letter not in the word, powder blue = in the word but in the wrong spot, cyan = right spot. */
 SCREENS.bWord=function(){
   if(!bonusOK()) return go('menu');
   const pool=wordGuessPool();
@@ -1992,8 +2020,8 @@ SCREENS.bWord=function(){
   }
   function draw(){
     const win=over&&rows.length&&rows[rows.length-1].g===ans;
-    app.innerHTML=bzHead('Word Guess')+`<p class="centre muted" style="margin-top:-6px">The secret word has <b>${len}</b> letters.<br><span class="sw correct"></span> right letter, right spot · <span class="sw present"></span> in the word, wrong spot · <span class="sw absent"></span> not in the word</p>
-      <div class="wg-grid" style="--n:${len}">${grid()}</div>
+    app.innerHTML=bzHead('Ice Blocks')+`<p class="centre muted" style="margin-top:-6px">The secret word has <b>${len}</b> letters. Every guess must be a real word.<br><span class="sw correct"></span> right letter, right spot · <span class="sw present"></span> in the word, wrong spot · <span class="sw absent"></span> not in the word</p>
+      <div class="wg-grid ice" style="--n:${len}">${grid()}</div>
       <p class="hg-msg ${win?'good':over?'bad':''}" id="wgMsg" role="status">${win?`🎉 Got it in ${rows.length}!`:over?'Out of tries! The word was:':esc(msg)}</p>
       ${over?bzReveal(cur):kb()}
       ${hinted&&!over?`<p class="bz-hint"><b>Hint:</b> ${esc(defFor(cur.w,cur.st)||'There is no hint for this word.')}</p>`:''}
@@ -2006,11 +2034,13 @@ SCREENS.bWord=function(){
     });
   }
   function shake(){ const r=app.querySelector('.wg-row.live'); if(!r) return; r.classList.remove('shake'); void r.offsetWidth; r.classList.add('shake'); }
+  function nope(m){ msg=m; $('#wgMsg').textContent=msg; $('#wgMsg').className='hg-msg bad'; shake(); bzSnd('bad'); }
   function press(k){
     if(over) return;
     if(k==='back'){ typed=typed.slice(0,-1); msg=''; }
     else if(k==='enter'){
-      if(typed.length<len){ msg=`Type all ${len} letters first.`; $('#wgMsg').textContent=msg; shake(); return; }
+      if(typed.length<len) return nope(`Type all ${len} letters first.`);
+      if(!isRealWord(typed)) return nope(`"${typed.toUpperCase()}" isn't a word we know. Try a real word.`);
       const r=mark(typed); rows.push({g:typed,r}); justRow=rows.length-1;
       [...typed].forEach((c,i)=>{ if((RANK[r[i]]||0)>(RANK[keys[c]]||0)) keys[c]=r[i]; });
       typed=''; msg='';
@@ -2023,54 +2053,188 @@ SCREENS.bWord=function(){
   newWord();
 };
 
-/* ---------- Bonus: Speed Spell (one minute) ---------- */
+/* ---------- Bonus: Let it Go (speed spelling with a balloon) ----------
+   The balloon is let go and climbs for as long as the timer lasts: 60 seconds to start,
+   +3 seconds for every word spelt correctly, -3 seconds for a skip, nothing for a wrong guess
+   (a guess needs at least 3 letters, or the whole word if it is shorter). The balloon climbs
+   10 m every second and jumps 20 m for every correct word, up through the clouds and into space.
+   Each student's highest climb is kept on the iPad only. */
+function LetItGoScene(canvas){
+  const ctx=canvas.getContext('2d');
+  const reduce=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let W=0,H=0,raf=0,alive=true,last=performance.now(),t=0;
+  let alt=0, shown=0, phase='held', release=0, rise=0, boostFx=0;
+  const hash=(a,b)=>{ let h=(a*374761393+b*668265263)|0; h=(h^(h>>>13))*1274126177|0; return ((h^(h>>>16))>>>0)/4294967296; };
+  function size(){ const dpr=Math.min(window.devicePixelRatio||1,2); W=canvas.clientWidth; H=canvas.clientHeight; canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); }
+  size();
+  const ro=window.ResizeObserver?new ResizeObserver(size):null; if(ro) ro.observe(canvas); else window.addEventListener('resize',size);
+  // sky colours from the ground up to space (altitude in metres, colour at the top and bottom of the view)
+  const SKY=[[0,'#8fd3ff','#d6f0ff'],[350,'#6cbcf2','#b8e2fb'],[700,'#3d7fd0','#7cb8ec'],[1000,'#1b3477','#3d6fbe'],[1300,'#0a1236','#1b2d6a'],[1600,'#04061a','#0b1236']];
+  const mix=(a,b,f)=>{ const p=x=>[1,3,5].map(i=>parseInt(x.slice(i,i+2),16)); const A=p(a),B=p(b); return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*f)).join(',')+')'; };
+  function skyAt(m){ let i=0; while(i<SKY.length-1&&m>=SKY[i+1][0]) i++; if(i===SKY.length-1) return [SKY[i][1],SKY[i][2]]; const a=SKY[i],b=SKY[i+1],f=(m-a[0])/(b[0]-a[0]); return [mix(a[1],b[1],f),mix(a[2],b[2],f)]; }
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function cloud(x,y,s,a){ ctx.globalAlpha=a; ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(x,y,18*s,0,7); ctx.arc(x+20*s,y-10*s,22*s,0,7); ctx.arc(x+44*s,y,17*s,0,7); ctx.arc(x+22*s,y+6*s,20*s,0,7); ctx.fill(); ctx.globalAlpha=1; }
+  function bird(x,y,s){ ctx.strokeStyle='#2b3a55'; ctx.lineWidth=2; ctx.beginPath(); const f=Math.sin(t*8+x)*3; ctx.moveTo(x-8*s,y-f); ctx.quadraticCurveTo(x-3*s,y-6*s,x,y); ctx.quadraticCurveTo(x+3*s,y-6*s,x+8*s,y-f); ctx.stroke(); }
+  function plane(x,y){ ctx.fillStyle='#f4f6fb'; ctx.strokeStyle='#5b6384'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.ellipse(x,y,26,5,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-4,y); ctx.lineTo(x-14,y+14); ctx.lineTo(x-6,y+14); ctx.lineTo(x+6,y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-20,y-2); ctx.lineTo(x-26,y-12); ctx.lineTo(x-20,y-12); ctx.lineTo(x-14,y-2); ctx.fill(); ctx.stroke(); }
+  function planet(kind,x,y){
+    ctx.save();
+    if(kind===0){ ctx.fillStyle='#e9edf3'; ctx.beginPath(); ctx.arc(x,y,26,0,7); ctx.fill(); ctx.fillStyle='#c9d0db'; [[-8,-6,6],[9,5,5],[-2,11,4]].forEach(([a,b,r])=>{ ctx.beginPath(); ctx.arc(x+a,y+b,r,0,7); ctx.fill(); }); }
+    else if(kind===1){ ctx.fillStyle='#f2c46d'; ctx.beginPath(); ctx.arc(x,y,22,0,7); ctx.fill(); ctx.strokeStyle='#e8d9a8'; ctx.lineWidth=4; ctx.beginPath(); ctx.ellipse(x,y,40,9,-0.35,0,7); ctx.stroke(); }
+    else if(kind===2){ ctx.fillStyle='#d9653b'; ctx.beginPath(); ctx.arc(x,y,16,0,7); ctx.fill(); ctx.fillStyle='rgba(120,40,20,.35)'; ctx.beginPath(); ctx.arc(x+5,y-3,5,0,7); ctx.fill(); }
+    else if(kind===3){ ctx.fillStyle='#9aa4b2'; ctx.fillRect(x-6,y-6,12,12); ctx.fillStyle='#3d6fbe'; ctx.fillRect(x-30,y-5,20,10); ctx.fillRect(x+10,y-5,20,10); ctx.strokeStyle='#cfd6df'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,y-6); ctx.lineTo(x,y-14); ctx.stroke(); }
+    else { ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-50,y-24); ctx.stroke(); ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill(); }
+    ctx.restore();
+  }
+  function ground(baseY){
+    if(baseY<-40) return;
+    ctx.fillStyle='#7bc96f'; ctx.beginPath(); ctx.moveTo(0,baseY); for(let x=0;x<=W;x+=20) ctx.lineTo(x,baseY-8-10*Math.sin(x/70)); ctx.lineTo(W,H+400); ctx.lineTo(0,H+400); ctx.fill();
+    ctx.fillStyle='#5aa84f'; ctx.fillRect(0,baseY+6,W,H+400);
+    // a little house and a tree
+    const hx=W*0.16, hy=baseY-6;
+    ctx.fillStyle='#fff4e0'; ctx.fillRect(hx,hy-30,44,30); ctx.fillStyle='#d9534f'; ctx.beginPath(); ctx.moveTo(hx-6,hy-30); ctx.lineTo(hx+22,hy-52); ctx.lineTo(hx+50,hy-30); ctx.fill();
+    ctx.fillStyle='#7aa7d9'; ctx.fillRect(hx+8,hy-22,10,10); ctx.fillStyle='#8a5a36'; ctx.fillRect(hx+26,hy-18,10,18);
+    const tx=W*0.82; ctx.fillStyle='#8a5a36'; ctx.fillRect(tx-4,baseY-30,8,30); ctx.fillStyle='#3f9a4a'; ctx.beginPath(); ctx.arc(tx,baseY-40,20,0,7); ctx.arc(tx-12,baseY-30,14,0,7); ctx.arc(tx+12,baseY-30,14,0,7); ctx.fill();
+  }
+  function balloon(x,y,heldBy){
+    const r=Math.max(22,Math.min(34,W/14));
+    // string
+    ctx.strokeStyle='#5b6384'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(x,y+r*1.18+4);
+    const len=heldBy!=null?heldBy-(y+r*1.18+4):r*2.4;
+    for(let i=1;i<=12;i++){ const yy=y+r*1.18+4+len*i/12; ctx.lineTo(x+Math.sin(t*3+i*0.7)*(reduce?0:3)*(i/12),yy); }
+    ctx.stroke();
+    // balloon
+    const g=ctx.createRadialGradient(x-r*0.35,y-r*0.45,r*0.15,x,y,r*1.3);
+    g.addColorStop(0,'#eefbfd'); g.addColorStop(0.35,'#b0e0e6'); g.addColorStop(1,'#7fb9c4');
+    ctx.fillStyle=g; ctx.strokeStyle='#5f9aa6'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(x,y,r,r*1.18,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#8cc4ce'; ctx.beginPath(); ctx.moveTo(x-5,y+r*1.18+6); ctx.lineTo(x+5,y+r*1.18+6); ctx.lineTo(x,y+r*1.18-1); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.75)'; ctx.beginPath(); ctx.ellipse(x-r*0.38,y-r*0.42,r*0.16,r*0.28,-0.5,0,7); ctx.fill();
+    if(boostFx>0){ ctx.strokeStyle='rgba(255,255,255,'+(boostFx*0.8).toFixed(2)+')'; ctx.lineWidth=3; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(x+i*14,y+r*1.6+10); ctx.lineTo(x+i*14,y+r*1.6+10+26*boostFx); ctx.stroke(); } }
+  }
+  function hand(x,y,open){
+    ctx.fillStyle='#f6d7c3'; ctx.strokeStyle='#c99a7d'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(x,y+14,14,18,0,0,7); ctx.fill(); ctx.stroke();     // palm and wrist from below
+    ctx.fillRect(x-10,y+20,20,H); ctx.strokeRect(x-10,y+20,20,H);
+    if(!open){ ctx.beginPath(); ctx.ellipse(x,y+2,12,8,0,0,7); ctx.fill(); ctx.stroke(); }       // fingers curled round the string
+    else for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.ellipse(x+i*8,y-6,4,9,i*0.3,0,7); ctx.fill(); ctx.stroke(); }
+  }
+  function frame(now){
+    if(!alive) return;
+    const dt=Math.min(0.05,(now-last)/1000); last=now; t+=dt;
+    if(phase==='release'){ rise=Math.min(1,rise+dt/1.2); if(rise>=1) phase='flying'; }
+    shown+=(alt-shown)*Math.min(1,dt*(reduce?20:3));
+    boostFx=Math.max(0,boostFx-dt*1.6);
+    const cruise=H*0.42, heldY=H*0.62;
+    const by=phase==='held'?heldY:heldY+(cruise-heldY)*(1-Math.pow(1-rise,3));
+    const camY=shown*LIG.PX;                        // how far the world has scrolled down
+    const groundY=H*0.88+camY+(phase==='flying'?0:0);
+    const [top,bot]=skyAt(shown);
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,top); g.addColorStop(1,bot); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // stars fade in high up; they repeat every 400 px so the sky keeps looping
+    const starA=clamp((shown-850)/400,0,1);
+    if(starA>0){ const cell=50, off=camY*0.3; for(let gy=Math.floor(-off/cell)-1;gy<=Math.ceil((H-off)/cell)+1;gy++) for(let gx=0;gx<=Math.ceil(W/cell);gx++){
+      const r=hash(gx,gy), x=gx*cell+r*cell, y=gy*cell+hash(gy,gx)*cell+off; if(r<0.55) continue;
+      ctx.globalAlpha=starA*(0.5+0.5*Math.sin(t*2+r*20)); ctx.fillStyle='#fff'; ctx.fillRect(x,y,r>0.92?2.4:1.4,r>0.92?2.4:1.4); } ctx.globalAlpha=1; }
+    // planets, the moon and other things drift past every 180 m once you're in space
+    if(shown>1150){ const step=180*LIG.PX; for(let k=Math.floor((camY-H)/step);k<=Math.floor((camY+H)/step)+1;k++){ if(k*step<1250*LIG.PX) continue;
+      const y=H*0.5-(k*step-camY)*0.6+H*0.5, x=W*(0.15+0.7*hash(k,7)); if(y>-60&&y<H+60) planet(((k%5)+5)%5,x,y); } }
+    // clouds: a repeating pattern of rows, thinning out as you get higher
+    const cloudA=1-clamp((shown-700)/400,0,1);
+    if(cloudA>0){ const row=110; for(let k=Math.floor(-H/row)-1;k<=Math.ceil(camY/row)+2;k++){
+      const y=groundY-140-k*row; if(y<-80||y>H+80||k<0) continue;
+      const r=hash(k,3); if(r<0.25) continue; const x=((hash(k,9)*W*1.4+t*(8+r*10))%(W+160))-80; cloud(x,y,0.7+r*0.7,cloudA*0.9); } }
+    // birds low down, an aeroplane further up
+    if(shown<450){ for(let k=1;k<=6;k++){ const y=groundY-260-k*230; if(y<-20||y>H+20) continue; bird(((hash(k,5)*W+t*30)%(W+40))-20,y,1); bird(((hash(k,5)*W+t*30+18)%(W+40))-20,y+8,0.8); } }
+    { const py=groundY-560*LIG.PX; if(py>-30&&py<H+30) plane(((t*60)%(W+120))-60,py); }
+    ground(groundY);
+    const sway=reduce?0:Math.sin(t*1.3)*8;
+    if(phase==='held'){ hand(W/2,H*0.62+70,false); balloon(W/2+sway*0.3,by,H*0.62+70); }
+    else{ if(phase==='release') hand(W/2,H*0.62+70+rise*60,true); balloon(W/2+sway,by,null); }
+    raf=requestAnimationFrame(frame);
+  }
+  raf=requestAnimationFrame(frame);
+  return {
+    letGo(){ if(phase==='held'){ phase='release'; rise=reduce?1:0; } },
+    setAlt(m,boost){ alt=m; if(boost) boostFx=1; },
+    stop(){ alive=false; cancelAnimationFrame(raf); if(ro) ro.disconnect(); else window.removeEventListener('resize',size); }
+  };
+}
 SCREENS.bSpeed=function(){
   if(!bonusOK()) return go('menu');
   const pool=bonusPool();
-  let order=[], oi=0, cur=null, score=0, log=[], end=0, f=null, iv=null, lastSec=SPEED_SECS;
+  let order=[], oi=0, cur=null, correct=0, skips=0, log=[], f=null, iv=null, scene=null, startAt=0, lastSec=LIG.START, height=0, running=false, inSpace=false;
+  const sig={signal:screenAC.signal};
+  const stopScene=()=>{ if(scene){ scene.stop(); scene=null; } };
+  screenAC.signal.addEventListener('abort',stopScene);
+  const timeLeft=()=>LIG.START+LIG.BONUS*correct-LIG.SKIP*skips-(performance.now()-startAt)/1000;
+  const climbed=()=>LIG.CLIMB*Math.max(0,(performance.now()-startAt)/1000)+LIG.BOOST*correct;
+  const minLen=()=>Math.min(LIG.MIN_LEN,cur?cur.w.length:LIG.MIN_LEN);
+  function hud(){
+    return `<div class="lig-hud"><div class="lig-time" id="tm" aria-label="Seconds left">${LIG.START}</div>
+      <div class="lig-alt"><div class="lig-best">Highest <b id="best">${fmtM(ligBest())}</b></div><div class="lig-now">Height <b id="ht">0 m</b></div></div></div>`;
+  }
   function intro(){
-    const best=speedBest();
-    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-intro"><div class="sp-big" aria-hidden="true">⏱️</div>
-      <p>Listen to each word, then spell it. You have <b>1 minute</b>.<br>How many can you get right?</p>
-      ${best?`<p class="sp-best">Your best: <b>${best}</b></p>`:''}
-      <button class="btn primary big-audio" id="go">Start!</button>
-      <p class="muted" style="margin-top:14px">Tap 🔊 to hear a word again. Tap Skip if you're stuck.</p></div>`;
+    stopScene(); running=false;
+    const best=ligBest();
+    app.innerHTML=bzHead('Let it Go')+`<div class="lig-wrap intro"><div class="lig-scene"><canvas class="lig-cv" aria-hidden="true"></canvas>${hud()}</div>
+      <div class="sp-intro"><p>Let the balloon go, then keep it climbing by spelling words correctly!</p>
+      <ul class="lig-rules"><li>⏱️ You start with <b>${LIG.START} seconds</b>.</li><li>✅ Every correct word adds <b>${LIG.BONUS} seconds</b> and gives the balloon a lift.</li><li>⏭️ Skipping a word takes away <b>${LIG.SKIP} seconds</b>.</li><li>❌ A wrong guess costs nothing, as long as you typed at least ${LIG.MIN_LEN} letters.</li></ul>
+      ${best?`<p class="sp-best">Your highest climb: <b>${fmtM(best)}</b></p>`:''}
+      <button class="btn primary big-audio" id="go">🎈 Let it go!</button></div></div>`;
     bzWire();
+    scene=LetItGoScene(app.querySelector('.lig-cv'));
     $('#go').onclick=()=>{ speak('Get ready!'); countdown(); };   // speaking inside the tap lets the iPad talk later
   }
   function countdown(){
     let n=3;
-    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-count" id="cd" aria-live="assertive">${n}</div>`; bzWire();
+    const box=app.querySelector('.sp-intro'); box.innerHTML=`<div class="sp-count" id="cd" aria-live="assertive">${n}</div>`;
     const t=setInterval(()=>{
       n--; const cd=$('#cd'); if(!cd){ clearInterval(t); return; }
       if(n>0){ cd.textContent=n; bzSnd('tick'); }
-      else if(n===0){ cd.textContent='Go!'; cd.classList.add('go'); }
+      else if(n===0){ cd.textContent='Let it go!'; cd.classList.add('go'); if(scene) scene.letGo(); bzSnd('whoosh'); }
       else { clearInterval(t); play(); }
     },800);
     timers.push(t); bzSnd('tick');
   }
   function play(){
-    order=shuffle(pool); oi=0; score=0; log=[]; lastSec=SPEED_SECS;
-    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-top"><div class="sp-timer" id="tm" aria-label="Seconds left">${SPEED_SECS}</div><div class="sp-score">✓ <b id="sc">0</b></div></div>
-      <p class="sp-fb" id="fb" role="status"></p>
+    order=shuffle(pool); oi=0; correct=0; skips=0; log=[]; lastSec=LIG.START; height=0; running=true; inSpace=false;
+    const sc=app.querySelector('.lig-scene');                 // keep the same canvas so the balloon carries on
+    app.innerHTML=`<div class="lig-bar"><span class="crumb">⚡ Bonus Zone</span><b class="lig-title">🎈 Let it Go</b><button class="btn small" id="quit">Stop</button></div>
+      <div class="lig-wrap play"><div id="scHost"></div>
+      <div class="lig-side"><p class="sp-fb" id="fb" role="status"></p>
       <div class="qcard sp-card">
         <button class="btn big-audio" id="hear"><span aria-hidden="true">🔊</span> Hear it again</button>
         <p class="sp-sent" id="sent"></p>
         <div class="answer"><div id="ansf"></div></div>
-        <div class="tools"><button class="btn" id="skip">Skip ⏭</button><button class="btn primary" id="sub">Check ✓</button></div>
-      </div>`;
-    bzWire();
+        <div class="tools"><button class="btn" id="skip">Skip ⏭ <small>(−${LIG.SKIP}s)</small></button><button class="btn primary" id="sub">Check ✓</button></div>
+      </div></div></div>`;
+    $('#scHost').replaceWith(sc);
+    $('#quit').onclick=finish;
     f=answerField($('#ansf'),{label:'Spell the word',placeholder:'Type the word',onEnter:submit});
     $('#hear').onclick=()=>{ if(cur) speak(cur.w); };
     $('#sub').onclick=submit; $('#skip').onclick=skip;
-    end=performance.now()+SPEED_SECS*1000;
-    iv=setInterval(tick,200); timers.push(iv);
-    next();
+    startAt=performance.now();
+    iv=setInterval(tick,100); timers.push(iv);
+    next(); tick();
+  }
+  function float(text,cls){
+    const sc=app.querySelector('.lig-scene'); if(!sc) return;
+    const el=document.createElement('div'); el.className='lig-float '+cls; el.textContent=text; sc.appendChild(el);
+    setTimeout(()=>el.remove(),1200);
   }
   function tick(){
-    const left=Math.max(0,Math.ceil((end-performance.now())/1000)), tm=$('#tm'); if(!tm) return;
+    if(!running) return;
+    const left=Math.max(0,Math.ceil(timeLeft())), tm=$('#tm'); if(!tm) return;
+    height=climbed();
+    if(scene) scene.setAlt(height);
+    $('#ht').textContent=fmtM(height);
+    if(!inSpace&&height>=1250){ inSpace=true; float('🚀 Space!','up space'); }
+    const best=ligBest(); $('#best').textContent=fmtM(Math.max(best,height));
+    app.querySelector('.lig-best').classList.toggle('beaten',height>best&&best>0);
     if(left!==lastSec){ lastSec=left; tm.textContent=left; tm.classList.toggle('hurry',left<=10); if(left<=5&&left>0) bzSnd('tick'); }
-    if(left<=0) finish();
+    if(timeLeft()<=0) finish();
   }
   function next(){
     if(oi>=order.length){ order=shuffle(pool); oi=0; }
@@ -2080,27 +2244,42 @@ SCREENS.bSpeed=function(){
     speak(cur.w);
   }
   function submit(){
-    if(!cur||!f) return;
+    if(!running||!cur||!f) return;
     const val=f.value.trim(); if(!val) return;
+    const fb=$('#fb');
+    if(val.replace(/\s/g,'').length<minLen()){ fb.className='sp-fb bad'; fb.textContent=`Type at least ${minLen()} letters before you check.`; return; }
     const ok=same(val,cur.w); log.push({p:cur,given:val,ok});
-    if(ok){ score++; $('#sc').textContent=score; bzSnd('ok'); $('#fb').className='sp-fb good'; $('#fb').innerHTML='✓ Correct!'; }
-    else { bzSnd('bad'); $('#fb').className='sp-fb bad'; $('#fb').innerHTML=`✗ It's spelt ${chunkAt(cur.x,cur.st)}`; }
-    next();
+    if(ok){ correct++; bzSnd('ok'); fb.className='sp-fb good'; fb.innerHTML=`✓ Correct! <b>+${LIG.BONUS}s</b>`; float('+'+LIG.BONUS+'s','up'); if(scene) scene.setAlt(climbed(),true); }
+    else { bzSnd('bad'); fb.className='sp-fb bad'; fb.innerHTML=`✗ It's spelt ${chunkAt(cur.x,cur.st)}`; }
+    tick(); if(running) next();
   }
-  function skip(){ if(!cur) return; log.push({p:cur,given:'',ok:false}); $('#fb').className='sp-fb'; $('#fb').innerHTML=`Skipped: ${chunkAt(cur.x,cur.st)}`; next(); }
+  function skip(){
+    if(!running||!cur) return;
+    skips++; log.push({p:cur,given:'',ok:false}); bzSnd('skip');
+    const fb=$('#fb'); fb.className='sp-fb'; fb.innerHTML=`Skipped (−${LIG.SKIP}s): ${chunkAt(cur.x,cur.st)}`; float('−'+LIG.SKIP+'s','down');
+    tick(); if(running) next();
+  }
   function finish(){
-    clearInterval(iv); KB.hide(); stopSpeech(); cur=null;
-    const best=speedBest(), isBest=score>best;
-    if(isBest) setSpeedBest(score);
-    app.innerHTML=bzHead('Speed Spell')+`<div class="sp-done"><div class="sp-big" aria-hidden="true">${isBest?'🏆':'⏱️'}</div>
-      <h3>Time's up!</h3><div class="sp-final"><b>${score}</b> correct in 1 minute</div>
-      <p class="sp-best">${isBest?(best?`New best! Your old best was ${best}.`:'Your first score!'):best?`Your best: <b>${best}</b>`:'Have another go!'}</p></div>
+    if(!running) return;
+    running=false; clearInterval(iv); KB.hide(); stopSpeech(); cur=null;
+    height=climbed(); if(scene) scene.setAlt(height);
+    const best=ligBest(), isBest=height>best&&height>=1;
+    if(isBest) setLigBest(Math.floor(height));
+    const sc=app.querySelector('.lig-scene');
+    app.innerHTML=bzHead('Let it Go')+`<div class="lig-wrap done"><div id="scHost"></div><div class="sp-done"><div class="sp-big" aria-hidden="true">${isBest?'🏆':'🎈'}</div>
+      <h3>${height>=1250?'Your balloon reached space!':'Time\'s up!'}</h3><div class="sp-final">Your balloon climbed <b>${fmtM(height)}</b></div>
+      <p class="sp-best">${correct} word${correct===1?'':'s'} correct${skips?`, ${skips} skipped`:''}.<br>${isBest?(best?`New highest! Your old highest was ${fmtM(best)}.`:'Your first climb!'):best?`Your highest: <b>${fmtM(best)}</b>`:'Have another go!'}</p></div></div>
       ${log.length?`<div class="tbl-wrap"><table class="fbt"><thead><tr><th scope="col"><span class="sr">Result</span></th><th scope="col">Your answer</th><th scope="col">Correct answer</th></tr></thead><tbody>
       ${log.map(r=>`<tr class="${r.ok?'ok':'bad'}"><td class="mk">${r.ok?'✓':'✗'}</td><td class="given">${r.given?esc(r.given):'<span class="muted">(skipped)</span>'}</td><td>${chunkAt(r.p.x,r.p.st)}</td></tr>`).join('')}</tbody></table></div>`:''}
       <div class="tools"><button class="btn primary" id="again">Play again</button></div>`;
+    if(sc) $('#scHost').replaceWith(sc); else $('#scHost').remove();
+    const ht=$('#ht'); if(ht) ht.textContent=fmtM(height);
+    const bt=$('#best'); if(bt) bt.textContent=fmtM(Math.max(best,height));
+    const tm=$('#tm'); if(tm){ tm.textContent='0'; tm.classList.remove('hurry'); }
     bzWire(); $('#again').onclick=intro;
-    if(isBest&&score>0) funBurst();
+    if(isBest&&height>0) funBurst();
   }
+  window.addEventListener('pagehide',()=>{ running=false; },sig);
   intro();
 };
 

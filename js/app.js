@@ -15,7 +15,7 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-10-15.2';
+const APP_VERSION = '2026-10-15.4';
 const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js','data/dictionary.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
@@ -1862,6 +1862,17 @@ function bzPick(game,pool){
   r.push(p.w); while(r.length>Math.min(15,Math.floor(pool.length/2))) r.shift();
   return p;
 }
+/* winning streaks for Spellsa and Ice Blocks: the streak keeps going while the student solves words in a row,
+   and goes back to 0 when they run out of lives or tries. The best streak is kept on the iPad only. */
+const STREAK_KEY='pldSpell.bzStreak.v1';
+function streakAll(){ return store.get(STREAK_KEY,{}); }
+function streakGet(game){ return Object.assign({cur:0,best:0},(streakAll()[S.demo?'teacher':walletId()]||{})[game]||{}); }
+function streakSave(game,v){ const all=streakAll(), who=S.demo?'teacher':walletId(); all[who]=all[who]||{}; all[who][game]={cur:v.cur,best:v.best}; store.set(STREAK_KEY,all); }
+function streakEnd(game,won){ const v=streakGet(game); if(won){ v.cur++; v.isBest=v.cur>v.best; if(v.isBest) v.best=v.cur; } else { v.lost=v.cur; v.cur=0; } streakSave(game,v); return v; }
+function streakHTML(game,last){
+  const v=streakGet(game), nb=last&&last.isBest&&v.best>1;
+  return `<div class="bz-streak${nb?' newbest':''}" role="status"><span class="st-cur${last&&!last.lost&&last.cur?' up':''}"><span aria-hidden="true">🔥</span> Streak <b>${v.cur}</b></span><span class="st-best"><span aria-hidden="true">🏆</span> Best streak <b>${v.best}</b></span>${nb?'<span class="st-new">New best!</span>':''}${last&&last.lost?`<span class="st-lost">Your streak of ${last.lost} has ended.</span>`:''}</div>`;
+}
 function ligBest(){ return +(store.get(LIG_KEY,{})[S.demo?'teacher':walletId()]||0); }
 function setLigBest(n){ const m=store.get(LIG_KEY,{}); m[S.demo?'teacher':walletId()]=n; store.set(LIG_KEY,m); }
 const fmtM=n=>Math.floor(n).toLocaleString('en-AU')+' m';
@@ -1914,8 +1925,8 @@ SCREENS.bonus=function(){
   app.innerHTML=`<div class="bz-hero"><div class="bz-bolt" aria-hidden="true">⚡</div><h1 class="bz-title">Bonus Zone</h1>
     <p class="bz-sub">${S.demo?'Just for fun.':`Gold for Week ${S.week}! These games are just for fun.`} They use all <b>${pool.length}</b> words from ${S.demo?`Stage ${S.stage}, from Term 1 up to Term ${S.term} Week ${S.week}`:'your spelling lists this year'}.</p></div>
     <div class="bz-games">
-      <button class="bz-game g-hang" data-g="bHang" ${hg?'':'disabled'}><span class="ic" aria-hidden="true">👗</span><span class="nm">Spellsa</span><span class="ds">Guess the letters before Spellsa is finished. You have ${HANG_LIVES} lives.</span></button>
-      <button class="bz-game g-word" data-g="bWord" ${wg?'':'disabled'}><span class="ic" aria-hidden="true">🧊</span><span class="nm">Ice Blocks</span><span class="ds">Find the secret word in ${WG_TRIES} tries, guessing real words. Cyan means the right letter in the right spot!</span></button>
+      <button class="bz-game g-hang" data-g="bHang" ${hg?'':'disabled'}><span class="ic" aria-hidden="true">👗</span><span class="nm">Spellsa</span><span class="ds">Guess the letters before Spellsa is finished. You have ${HANG_LIVES} lives.${streakGet('hang').best?`<br><b>Best streak: ${streakGet('hang').best}</b>`:''}</span></button>
+      <button class="bz-game g-word" data-g="bWord" ${wg?'':'disabled'}><span class="ic" aria-hidden="true">🧊</span><span class="nm">Ice Blocks</span><span class="ds">Find the secret word in ${WG_TRIES} tries, guessing real words. Cyan means the right letter in the right spot!${streakGet('word').best?`<br><b>Best streak: ${streakGet('word').best}</b>`:''}</span></button>
       <button class="bz-game g-speed" data-g="bSpeed"><span class="ic" aria-hidden="true">🎈</span><span class="nm">Let it Go</span><span class="ds">Spell words to keep your balloon climbing. Every correct word adds ${LIG.BONUS} seconds!${best?`<br><b>Your highest: ${fmtM(best)}</b>`:''}</span></button>
     </div>
     <div class="tools"><button class="btn" id="back">Back to activities</button></div>`;
@@ -1928,10 +1939,10 @@ SCREENS.bonus=function(){
 SCREENS.bHang=function(){
   if(!bonusOK()) return go('menu');
   const pool=bonusPool().filter(p=>/[A-Za-z]/.test(p.w));
-  let cur, guessed, wrong, over, hinted;
+  let cur, guessed, wrong, over, hinted, last=null;
   const letters=()=>new Set(cur.w.toLowerCase().replace(/[^a-z]/g,'').split(''));
   const won=()=>[...letters()].every(l=>guessed.has(l));
-  function newWord(){ cur=bzPick('hang',pool); guessed=new Set(); wrong=0; over=false; hinted=false; draw(); }
+  function newWord(){ cur=bzPick('hang',pool); guessed=new Set(); wrong=0; over=false; hinted=false; last=null; draw(); }
   function wordHTML(){
     return [...cur.w].map(ch=>{
       if(ch===' ') return '<span class="hg-gap"></span>';
@@ -1959,7 +1970,7 @@ SCREENS.bHang=function(){
   }
   function draw(){
     const win=over&&won(), left=HANG_LIVES-wrong;
-    app.innerHTML=bzHead('Spellsa')+`<div class="hg">
+    app.innerHTML=bzHead('Spellsa')+streakHTML('hang',last)+`<div class="hg">
       <div class="hg-pic sp-pic">${pic()}<div class="hg-lives"><span aria-hidden="true">${'💙'.repeat(left)}${'🤍'.repeat(wrong)}</span><span class="sr">${left} lives left</span></div></div>
       <div class="hg-main">
         <div class="hg-word" aria-label="Secret word, ${cur.w.length} characters">${wordHTML()}</div>
@@ -1976,7 +1987,7 @@ SCREENS.bHang=function(){
         const b=e.target.closest('[data-l]'); if(!b||b.disabled) return;
         const l=b.dataset.l; guessed.add(l);
         if(letters().has(l)) bzSnd('ok'); else { wrong++; bzSnd('bad'); }
-        if(won()){ over=true; funBurst(); } else if(wrong>=HANG_LIVES) over=true;
+        if(won()){ over=true; last=streakEnd('hang',true); funBurst(); } else if(wrong>=HANG_LIVES){ over=true; last=streakEnd('hang',false); }
         draw();
       };
     }
@@ -1991,9 +2002,9 @@ SCREENS.bWord=function(){
   if(!bonusOK()) return go('menu');
   const pool=wordGuessPool();
   if(!pool.length) return go('bonus');
-  let cur, ans, len, rows, typed, over, keys, hinted, msg, justRow;
+  let cur, ans, len, rows, typed, over, keys, hinted, msg, justRow, last=null;
   const RANK={correct:3,present:2,absent:1};
-  function newWord(){ cur=bzPick('word',pool); ans=cur.w.toLowerCase(); len=ans.length; rows=[]; typed=''; over=false; keys={}; hinted=false; msg=''; justRow=-1; draw(); }
+  function newWord(){ cur=bzPick('word',pool); ans=cur.w.toLowerCase(); len=ans.length; rows=[]; typed=''; over=false; keys={}; hinted=false; msg=''; justRow=-1; last=null; draw(); }
   function mark(g){
     const res=Array(len).fill('absent'), left={};
     for(let i=0;i<len;i++){ if(g[i]===ans[i]) res[i]='correct'; else left[ans[i]]=(left[ans[i]]||0)+1; }
@@ -2020,7 +2031,7 @@ SCREENS.bWord=function(){
   }
   function draw(){
     const win=over&&rows.length&&rows[rows.length-1].g===ans;
-    app.innerHTML=bzHead('Ice Blocks')+`<p class="centre muted" style="margin-top:-6px">The secret word has <b>${len}</b> letters. Every guess must be a real word.<br><span class="sw correct"></span> right letter, right spot · <span class="sw present"></span> in the word, wrong spot · <span class="sw absent"></span> not in the word</p>
+    app.innerHTML=bzHead('Ice Blocks')+streakHTML('word',last)+`<p class="centre muted" style="margin-top:-6px">The secret word has <b>${len}</b> letters. Every guess must be a real word.<br><span class="sw correct"></span> right letter, right spot · <span class="sw present"></span> in the word, wrong spot · <span class="sw absent"></span> not in the word</p>
       <div class="wg-grid ice" style="--n:${len}">${grid()}</div>
       <p class="hg-msg ${win?'good':over?'bad':''}" id="wgMsg" role="status">${win?`🎉 Got it in ${rows.length}!`:over?'Out of tries! The word was:':esc(msg)}</p>
       ${over?bzReveal(cur):kb()}
@@ -2044,8 +2055,8 @@ SCREENS.bWord=function(){
       const r=mark(typed); rows.push({g:typed,r}); justRow=rows.length-1;
       [...typed].forEach((c,i)=>{ if((RANK[r[i]]||0)>(RANK[keys[c]]||0)) keys[c]=r[i]; });
       typed=''; msg='';
-      if(r.every(x=>x==='correct')){ over=true; timers.push(setTimeout(funBurst,len*120+250)); }
-      else if(rows.length>=WG_TRIES){ over=true; bzSnd('bad'); }
+      if(r.every(x=>x==='correct')){ over=true; last=streakEnd('word',true); timers.push(setTimeout(funBurst,len*120+250)); }
+      else if(rows.length>=WG_TRIES){ over=true; last=streakEnd('word',false); bzSnd('bad'); }
     }
     else if(typed.length<len){ typed+=k; msg=''; }
     draw();
@@ -2180,7 +2191,7 @@ SCREENS.bSpeed=function(){
     const best=ligBest();
     app.innerHTML=bzHead('Let it Go')+`<div class="lig-wrap intro"><div class="lig-scene"><canvas class="lig-cv" aria-hidden="true"></canvas>${hud()}</div>
       <div class="sp-intro"><p>Let the balloon go, then keep it climbing by spelling words correctly!</p>
-      <ul class="lig-rules"><li>⏱️ You start with <b>${LIG.START} seconds</b>.</li><li>✅ Every correct word adds <b>${LIG.BONUS} seconds</b> and gives the balloon a lift.</li><li>⏭️ Skipping a word takes away <b>${LIG.SKIP} seconds</b>.</li><li>❌ A wrong guess costs nothing, as long as you typed at least ${LIG.MIN_LEN} letters.</li></ul>
+      <ul class="lig-rules"><li>⏱️ You start with <b>${LIG.START} seconds</b>.</li><li>✅ Every correct word adds <b>${LIG.BONUS} seconds</b> and gives the balloon a lift.</li><li>⏭️ Skipping a word takes away <b>${LIG.SKIP} seconds</b>.</li><li>❌ A wrong answer costs nothing, as long as it was a genuine guess.</li></ul>
       ${best?`<p class="sp-best">Your highest climb: <b>${fmtM(best)}</b></p>`:''}
       <button class="btn primary big-audio" id="go">🎈 Let it go!</button></div></div>`;
     bzWire();
@@ -2247,7 +2258,7 @@ SCREENS.bSpeed=function(){
     if(!running||!cur||!f) return;
     const val=f.value.trim(); if(!val) return;
     const fb=$('#fb');
-    if(val.replace(/\s/g,'').length<minLen()){ fb.className='sp-fb bad'; fb.textContent=`Type at least ${minLen()} letters before you check.`; return; }
+    if(val.replace(/\s/g,'').length<minLen()){ fb.className='sp-fb bad'; fb.textContent='Have a genuine go at spelling the word before you check.'; return; }
     const ok=same(val,cur.w); log.push({p:cur,given:val,ok});
     if(ok){ correct++; bzSnd('ok'); fb.className='sp-fb good'; fb.innerHTML=`✓ Correct! <b>+${LIG.BONUS}s</b>`; float('+'+LIG.BONUS+'s','up'); if(scene) scene.setAlt(climbed(),true); }
     else { bzSnd('bad'); fb.className='sp-fb bad'; fb.innerHTML=`✗ It's spelt ${chunkAt(cur.x,cur.st)}`; }

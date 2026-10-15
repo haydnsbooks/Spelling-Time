@@ -10,7 +10,7 @@ Spelling activities for PLD Stages 2–6: word list (tap a word for its pop-up),
 | `css/styles.css` | Look and layout | To change colours or sizes |
 | `js/app.js` | How the app works | For new features |
 | `js/config.js` | Google Sheet link | If the web app URL changes |
-| `data/class-list.js` | Rooms and students | When your class changes |
+| `data/class-list.js` | Rooms and students (Room 9, Room 10 and Room 12) | When a class changes or a room is added |
 | `data/pld-data.js` | PLD word lists, week index and passages | Only if the PLD data changes |
 | `data/content.js` | Definitions and cloze sentences for every week of Stages 2–6 | To change a definition or sentence |
 | `data/word-info.js` | The word pop-up for every list word in Stages 2–6 (emoji, definition, part of speech, synonyms, antonyms, root, word family, prefixes and suffixes) | To change what a word's pop-up says |
@@ -34,9 +34,10 @@ Teacher → **Open Student Activities** opens the pages students see, with every
 When a student gets **gold** for a week, a flashing **⚡ BONUS ZONE ⚡** button appears in the top right of that week's activities page. The games are just for fun and use every word from every list the student has had this year: all 9 weeks of earlier terms (in the stage they had that term) plus this term up to the week they're on.
 
 - **Spellsa**: tap letters to find the word before the picture of Spellsa (a girl in a light blue dress) is finished. 6 lives: each wrong letter adds her head, hair, dress, left arm, right arm, then shoes. 💡 Hint shows the definition.
+- **Streaks (Spellsa and Ice Blocks):** 🔥 **Streak** counts words solved in a row and goes back to 0 when a word is lost. 🏆 **Best streak** is the student's highest. Both are kept on that iPad only, separately for each game.
 - **Ice Blocks**: like Wordle. Find the secret word (4 to 8 letters, letters only) in 6 tries. **Every guess must be a real word**, so a mash of letters is turned away without using up a row. **Cyan** is the right letter in the right spot, **powder blue** is in the word but in the wrong spot, and **snow white** is not in the word. 💡 Hint shows the definition. The real-word check uses `data/dictionary.js` (an Australian English word list) plus every spelling list word. To allow an extra word, add it to `EXTRA` at the bottom of that file.
 - **Let it Go**: a powder blue balloon is let go and climbs through the sky, past the clouds and into space. The iPad says a word (with the cloze sentence as a clue) and the student spells it on the on-screen keyboard.
-  - The timer starts at **60 seconds**. Each correct word adds **3 seconds** (and gives the balloon a lift). **Skip** takes away 3 seconds. A wrong guess costs nothing, but a guess needs at least 3 letters (or the whole word, for 2-letter words).
+  - The timer starts at **60 seconds**. Each correct word adds **3 seconds** (and gives the balloon a lift). **Skip** takes away 3 seconds. A wrong answer costs nothing, as long as it's a genuine guess (students are told this; behind the scenes the app won't check an answer shorter than 3 letters, or the whole word for 2-letter words).
   - The balloon climbs 10 m every second and 20 m for every correct word, so the longer a student keeps spelling correctly, the higher it goes. Space starts at about 1,250 m.
   - The **Height** counter shows how high the balloon is now, with the student's **Highest** climb above it. Each student's highest climb is kept on that iPad only.
   - All three numbers (60, 3 and 3) are in `LIG` near the top of the Bonus Zone section of `js/app.js`.

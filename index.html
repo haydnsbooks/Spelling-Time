@@ -6,45 +6,10 @@
 <title>Spelling Time</title>
 <meta name="application-name" content="Spelling Time">
 <meta name="apple-mobile-web-app-title" content="Spelling Time">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9D%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Baloo+2:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css">
+<meta name="theme-color" content="#f4f6f3">
 </head>
 <body>
-<div id="topbar" class="hidden" role="navigation" aria-label="Session">
-  <div class="bar">
-    <div class="tb" data-k="name"><button aria-expanded="false" id="tbName">Name</button></div>
-    <div class="tb" data-k="term"><button aria-expanded="false" id="tbTerm">Term –</button></div>
-    <div class="tb" data-k="stage"><button aria-expanded="false" id="tbStage">Stage –</button></div>
-    <div class="tb" data-k="week"><button aria-expanded="false" id="tbWeek">Week –</button></div>
-    <div class="tb" data-k="progress"><button id="tbProg">Progress</button></div>
-    <div class="tb" data-k="shop"><button id="tbShop"><span aria-hidden="true">🛒</span><span class="tbl"> Supermarket</span></button></div>
-    <div class="tb" data-k="fridge"><button id="tbFridge"><span aria-hidden="true">🧊</span><span class="tbl"> Fridge</span></button></div>
-    <div class="tb fr" data-k="fr"><button id="tbFr" aria-label="Fremantium balance"><span id="tbFrIc"></span><b id="tbFrN">–</b></button></div>
-  </div>
-</div>
-
-<main class="sheet" id="app"><p id="loading" style="text-align:center">Loading…</p></main>
-<script>
-/* shows problems on screen instead of a blank page */
-window.addEventListener('error',function(e){
-  var m=document.getElementById('app'); if(!m) return;
-  var d=document.createElement('div'); d.className='notice'; d.style.marginTop='16px';
-  d.textContent='Something went wrong: '+(e.message||'a file did not load')+(e.filename?' ('+e.filename.split('/').pop()+(e.lineno?' line '+e.lineno:'')+')':'');
-  m.appendChild(d);
-},true);
-setTimeout(function(){ var l=document.getElementById('loading'); if(l) l.textContent='Still loading… If this stays here, one of the app files (js/app.js or the data files) has not loaded. Check they are in the right folders on GitHub.'; },6000);
-</script>
-
-<script src="js/config.js"></script>
-<script src="data/class-list.js"></script>
-<script src="data/pld-data.js"></script>
-<script src="data/content.js"></script>
-<script src="data/word-info.js"></script>
-<script src="data/supermarket.js"></script>
-<script src="data/dictionary.js"></script>
-<script src="js/app.js"></script>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

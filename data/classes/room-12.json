@@ -1,0 +1,204 @@
+{
+  "room": "Room 12",
+  "yearLevels": [
+    6
+  ],
+  "students": [
+    {
+      "classNumber": 1,
+      "firstName": "Muhammad",
+      "lastName": "Anas",
+      "displayName": "Muhammad Anas",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 2,
+      "firstName": "Oliver",
+      "lastName": "Anthony",
+      "displayName": "Oliver Anthony",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 3,
+      "firstName": "Sean",
+      "lastName": "Ariyaratnam",
+      "displayName": "Sean Ariyaratnam",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 4,
+      "firstName": "Dante",
+      "lastName": "Bonardi",
+      "displayName": "Dante Bonardi",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 5,
+      "firstName": "Annabelle",
+      "lastName": "Calligaro",
+      "displayName": "Annabelle Calligaro",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 6,
+      "firstName": "Alyssa",
+      "lastName": "Chen",
+      "displayName": "Alyssa Chen",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 7,
+      "firstName": "Jacqueline",
+      "lastName": "Chow",
+      "displayName": "Jacqueline Chow",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 8,
+      "firstName": "Riccardo",
+      "lastName": "D'Angelo",
+      "displayName": "Riccardo D'Angelo",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 9,
+      "firstName": "Edward",
+      "lastName": "Gao",
+      "displayName": "Edward Gao",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 10,
+      "firstName": "Adam",
+      "lastName": "Harris",
+      "displayName": "Adam Harris",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 11,
+      "firstName": "Kaiden",
+      "lastName": "He",
+      "displayName": "Kaiden He",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 12,
+      "firstName": "Taha",
+      "lastName": "Jatoi",
+      "displayName": "Taha Jatoi",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 13,
+      "firstName": "Isaac",
+      "lastName": "Lim",
+      "displayName": "Isaac Lim",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 14,
+      "firstName": "Harrison",
+      "lastName": "Low",
+      "displayName": "Harrison Low",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 15,
+      "firstName": "Jeremy",
+      "lastName": "Ma",
+      "displayName": "Jeremy Ma",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 16,
+      "firstName": "Kelly",
+      "lastName": "McMahon",
+      "displayName": "Kelly McMahon",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 17,
+      "firstName": "Singye",
+      "lastName": "Namgay",
+      "displayName": "Singye Namgay",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 18,
+      "firstName": "Magnus",
+      "lastName": "Nilsson",
+      "displayName": "Magnus Nilsson",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 19,
+      "firstName": "Millie",
+      "lastName": "O'Mara",
+      "displayName": "Millie O'Mara",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 20,
+      "firstName": "Jayce",
+      "lastName": "Rolirad",
+      "displayName": "Jayce Rolirad",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 21,
+      "firstName": "George",
+      "lastName": "Saxler",
+      "displayName": "George Saxler",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 22,
+      "firstName": "Nyingdruk",
+      "lastName": "Deki Selden",
+      "displayName": "Nyingdruk Deki Selden",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 23,
+      "firstName": "Jordan",
+      "lastName": "Stein-Frankel",
+      "displayName": "Jordan Stein-Frankel",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 24,
+      "firstName": "Roscoe",
+      "lastName": "Thomas",
+      "displayName": "Roscoe Thomas",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 25,
+      "firstName": "Tenshok",
+      "lastName": "Twang",
+      "displayName": "Tenshok Twang",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 26,
+      "firstName": "Ethan",
+      "lastName": "Wang",
+      "displayName": "Ethan Wang",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 27,
+      "firstName": "George",
+      "lastName": "Wang",
+      "displayName": "George Wang",
+      "yearLevel": 6
+    },
+    {
+      "classNumber": 28,
+      "firstName": "Anna",
+      "lastName": "Yang",
+      "displayName": "Anna Yang",
+      "yearLevel": 6
+    }
+  ]
+}

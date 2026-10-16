@@ -6,90 +6,50 @@ Spelling activities for PLD Stages 2–6: word list (tap a word for its pop-up),
 
 | File | What it is | When to edit it |
 |---|---|---|
-| `index.html` | The page itself | Rarely |
-| `css/styles.css` | Look and layout | To change colours or sizes |
-| `js/app.js` | How the app works | For new features |
-| `js/config.js` | Google Sheet link | If the web app URL changes |
-| `data/class-list.js` | Rooms and students (Room 9, Room 10 and Room 12) | When a class changes or a room is added |
-| `data/pld-data.js` | PLD word lists, week index and passages | Only if the PLD data changes |
-| `data/content.js` | Definitions and cloze sentences for every week of Stages 2–6 | To change a definition or sentence |
-| `data/word-info.js` | The word pop-up for every list word in Stages 2–6 (emoji, definition, part of speech, synonyms, antonyms, root, word family, prefixes and suffixes) | To change what a word's pop-up says |
-| `data/supermarket.js` | Supermarket aisles, items and prices | To change the food (add 1 to `version` when you do) |
-| `data/dictionary.js` | Real words allowed as guesses in Ice Blocks | To allow an extra word (add it to `EXTRA`) |
-| `version.json` | The newest app version number | Every time you upload an update |
+| `src/App.tsx` | App state and navigation | For new top-level workflows |
+| `src/features/` | Authentication, activities, progress, store, and teacher screens | For feature work |
+| `src/api.ts` | Typed Google Sheets requests | When the Apps Script API changes |
+| `src/curriculum.ts` | PLD JSON adapters, loaded with the learning screens | Only if curriculum loading changes |
+| `src/input.css`, `src/styles.css` | Locally-built Tailwind and app styling | For visual changes |
+| `data/config.json` | Google Sheet web app URL | If the web app URL changes |
+| `data/` | Sharded class, PLD, word, supermarket, and dictionary datasets | When source data changes |
+| `version.json` | Release metadata | When preparing a hosted release |
 
 `apps-script/Code.gs` is the Google Apps Script. **Don't upload it to GitHub**: once your teacher password is in it, it belongs only in the Google Sheet (Extensions → Apps Script).
 
-## Open Student Activities (teacher, for the smartboard)
+## Workflows
 
-Teacher → **Open Student Activities** opens the pages students see, with everything unlocked:
+Students sign in with their room, name, and password. The learning screen uses the assigned PLD stage and selected term/week to provide word lists, passages, spelling practice, definitions, cloze, editing, and dictation. Results are sent to the Google Sheet. Progress and supermarket purchases are available from the workspace navigation.
 
-- Choose any **term**, **stage** and **week**, then **Show the activities**. Every activity is shown, even ones switched off in Set Activities.
-- The top bar shows **Teacher view ▾ / Term ▾ / Stage ▾ / Week ▾**, so you can jump anywhere. **Teacher view ▾ → Back to teacher page** returns to the teacher menu.
-- Nothing is saved: results don't go to the Google Sheet or the device, there are no medals or Fremantium, and the Supermarket, Fridge and Progress buttons are hidden.
-- The **Bonus Zone** button is always there in teacher view. Its games use every word in the chosen stage from Term 1 up to the chosen week.
-
-## Bonus Zone
-
-When a student gets **gold** for a week, a flashing **⚡ BONUS ZONE ⚡** button appears in the top right of that week's activities page. The games are just for fun and use every word from every list the student has had this year: all 9 weeks of earlier terms (in the stage they had that term) plus this term up to the week they're on.
-
-- **Spellsa**: tap letters to find the word before the picture of Spellsa (a girl in a light blue dress) is finished. 6 lives: each wrong letter adds her head, hair, dress, left arm, right arm, then shoes. 💡 Hint shows the definition.
-- **Streaks (Spellsa and Ice Blocks):** 🔥 **Streak** counts words solved in a row and goes back to 0 when a word is lost. 🏆 **Best streak** is the student's highest. Both are kept on that iPad only, separately for each game.
-- **Ice Blocks**: like Wordle. Find the secret word (4 to 8 letters, letters only) in 6 tries. **Every guess must be a real word**, so a mash of letters is turned away without using up a row. **Cyan** is the right letter in the right spot, **powder blue** is in the word but in the wrong spot, and **snow white** is not in the word. 💡 Hint shows the definition. The real-word check uses `data/dictionary.js` (an Australian English word list) plus every spelling list word. To allow an extra word, add it to `EXTRA` at the bottom of that file.
-- **Let it Go**: a powder blue balloon is let go and climbs through the sky, past the clouds and into space. The iPad says a word (with the cloze sentence as a clue) and the student spells it on the on-screen keyboard.
-  - The timer starts at **60 seconds**. Each correct word adds **3 seconds** (and gives the balloon a lift). **Skip** takes away 3 seconds. A wrong answer costs nothing, as long as it's a genuine guess (students are told this; behind the scenes the app won't check an answer shorter than 3 letters, or the whole word for 2-letter words).
-  - The balloon climbs 10 m every second and 20 m for every correct word, so the longer a student keeps spelling correctly, the higher it goes. Space starts at about 1,250 m.
-  - The **Height** counter shows how high the balloon is now, with the student's **Highest** climb above it. Each student's highest climb is kept on that iPad only.
-  - All three numbers (60, 3 and 3) are in `LIG` near the top of the Bonus Zone section of `js/app.js`.
-
-Bonus games don't send anything to the Google Sheet and don't earn medals or Fremantium.
+The teacher workspace supports stage assignments, term activity settings, and class progress. Bonus games use the selected week's list: Spellsa reveals a word by letter, Ice Blocks accepts dictionary words, and Let it Go is a timed spelling round.
 
 ## Word pop-up
 
-In **Word List**, a student taps a word to hear it and open its pop-up. The pop-up shows the word (in its PLD colours) with emojis, then Definition, Part of Speech, Synonyms, Antonyms, Root, Word family and Prefixes and Suffixes. Anything that doesn't apply shows **n/a**. The pop-up scrolls on its own if it is taller than the screen, and closes with ✕, **Close** or a tap outside it.
+In **Word List**, a student taps a word to hear it and open its pop-up. The pop-up shows the word in its PLD colours, followed by Definition, Part of Speech, Synonyms, Antonyms, Root, Word family, and Prefixes and Suffixes. Anything that doesn't apply shows **n/a**. The pop-up scrolls on its own if it is taller than the screen, and closes with **Close** or a tap outside it.
 
-The pop-up text lives in `data/word-info.js`, one line per word. The first lines of that file explain each field. If a word's line is missing, the pop-up still opens and uses the definition from `data/content.js`.
+The pop-up text lives in `data/word-info-shards/`; the app loads these word records when the word list opens and falls back to `data/content-shards/` for a definition.
 
-## Releasing an update (version check)
+## Build and release
 
-When someone presses a login button (student **That's me** or teacher **Log in**), the app checks `version.json` on GitHub. If the iPad is running an older copy, a pop-up asks them to tap **Update the app**. That button re-downloads every app file and reloads the page.
-
-When Claude makes an update, it changes the version number for you, so there's nothing to do. You only need these steps if you edit files yourself. Every time you upload changed files to GitHub:
-
-1. Pick a new version number, e.g. `2026-10-02.1`.
-2. Put it in **`version.json`**: `{ "version": "2026-10-02.1" }`
-3. Put the same number in **`js/app.js`**, near the top: `const APP_VERSION = '2026-10-02.1';`
-
-If the two don't match, everyone gets the update pop-up every time they log in, so always change both. If the check can't run (e.g. no internet), login carries on as normal.
+Run `npm run build` to create the production site in `dist/`. Publish that directory with GitHub Pages. Keep the private Apps Script source and teacher password out of the repository. `version.json` remains release metadata; the app bundle no longer uses the legacy in-app version checker.
 
 ## Updating the Apps Script
 
 1. Open the old Code.gs and copy your teacher password.
 2. Paste the new `Code.gs` over everything, then put your password into `TEACHER_PASSWORD` at the top.
-3. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** The URL stays the same.
+3. **Deploy → Manage deployments →  Edit → Version: New version → Deploy.** The URL stays the same.
 
 ## If logins stop working
 
-1. **Test the Apps Script:** paste the web app URL from `js/config.js` into a browser. It should show `{"service":"PLD Spelling Activities", ... "ok":true}`.
-2. **"couldn't be found (error 404)"** or a Google error page: in Apps Script go to **Deploy → Manage deployments**. Copy the **Web app URL** of the active deployment and make sure `js/config.js` has exactly that URL. If you made a *New deployment* instead of editing the existing one, the URL will have changed.
+1. **Test the Apps Script:** paste the web app URL from `data/config.json` into a browser. It should show `{"service":"PLD Spelling Activities", ... "ok":true}`.
+2. **"couldn't be found (error 404)"** or a Google error page: in Apps Script go to **Deploy → Manage deployments**. Copy the **Web app URL** of the active deployment and make sure `data/config.json` has exactly that URL. If you made a *New deployment* instead of editing the existing one, the URL will have changed.
 3. **"sent back a web page instead of data"**: in the deployment settings, *Execute as* should be **Me** and *Who has access* should be **Anyone**.
 4. **"That password is not right"** for the teacher: check `TEACHER_PASSWORD` at the top of Code.gs, then deploy a new version.
 5. **"The Google Sheet didn't answer"**, **"took too long to answer"** or **"is busy with lots of students at once"**: see the next section.
 
 ## When the whole class uses it at once
 
-Google lets the Apps Script run at most **30 requests at the same time** for one Google account, and because the web app runs as you (*Execute as: Me*), every iPad's requests count towards your account. When too many arrive together, Google turns the extra ones away and the app can't read why.
-
-The app keeps the class under that limit:
-
-- Each student screen (activities menu, trophy cabinet, supermarket, fridge) gets everything it needs in **one request** (`studentSync`), which also saves any results waiting on the iPad. Opening another screen within 15 seconds reuses that answer instead of asking again.
-- An iPad never sends more than 2 requests at once, and the activities menu and trophy cabinet wait a random moment (up to about 1 second) so a whole class opening the app together doesn't all ask in the same second.
-- A request that fails because the sheet is busy or didn't answer is **tried again automatically** (up to twice, after a short random wait) before the student sees a message.
-- Only requests that change the sheet (saving results, buying, Reset, passwords, teacher changes) wait their turn to write. Reading never waits.
-
-The message a student sees now says which problem it was: no internet on the iPad, the sheet took too long, the sheet didn't answer (usually too many at once) or the sheet was busy. If one keeps appearing when only a few students are on, open **Executions** in Apps Script to see the failed runs and their error.
-
-If the new app is uploaded before the new Code.gs is deployed, it still works: it notices the old Apps Script and uses the old one-thing-at-a-time requests (slower, but nothing breaks). Deploy the new Code.gs to get the full benefit.
+Google Apps Script limits concurrent requests. The app uses `studentSync` when available and falls back to separate stage/activity requests for older deployments. Network and server errors are shown in the workspace; use the retry control or check **Executions** in Apps Script if a request continues to fail. Avoid redeploying Apps Script during class use.
 
 ## Student passwords
 
@@ -101,33 +61,33 @@ If the new app is uploaded before the new Code.gs is deployed, it still works: i
 
 Teacher → **Set Activities** → choose a term → untick activities to hide them from students for that term → **Confirm** → confirm twice.
 
-Medals use only the medal activities (the 🏅 ones) that are switched on:
+Medals use only the assessed activities that are switched on:
 
 | Medal | Needs at 100% |
 |---|---|
-| 🥇 Gold | all of them |
-| 🥈 Silver | 60%, rounded up |
-| 🥉 Bronze | 30%, rounded up |
+| Gold | all of them |
+| Silver | 60%, rounded up |
+| Bronze | 30%, rounded up |
 
-With all 6 switched on, that's 2 / 4 / 6, the same as before. To change the percentages, edit `SILVER_PERCENT` and `BRONZE_PERCENT` in **both** `js/app.js` and `Code.gs`.
+With all 6 switched on, that's 2 / 4 / 6. The Apps Script remains the source of truth for medal calculations and rewards.
 
 Changing a term's activities recalculates medals and **restocks every student's supermarket** (all Fremantium given back). This doesn't use up anyone's daily fridge Reset.
 
 ## Fremantium and the supermarket
 
-- A student earns Fremantium the first time they reach each medal in a week: 🥉 3, 🥈 +5, 🥇 +10. That makes 18 for a gold week.
-- The balance is always in the top bar. The Sheet works it out as *earned from medals − spent*.
+- A student earns Fremantium the first time they reach each medal in a week: 3, +5, +10. That makes 18 for a gold week.
+- The balance appears in the Supermarket view. The Sheet works it out as *earned from medals − spent*.
 - **Supermarket:** 6 aisles (tabs), each with 4 shelves. The dearest items are on the top shelf and the cheapest are on the bottom. There's one of each item, 96 in total.
 - The prices add up to **648**, which is 36 weeks × 18. So a student can only buy everything by getting gold in every week of the year.
-- **Fridge:** each aisle has its own compartment (freezer, top shelf, middle shelf, fruit drawer, veggie drawer, door shelves). Items not bought yet show as grey silhouettes.
+- **My fridge:** shows the items currently owned and the balance available for another purchase.
 - **Reset** puts everything back on the shelves and gives all the Fremantium back. **Each student can use Reset once a day.** After that the button is greyed out with a note saying they can reset again tomorrow. Each use is logged in the **Resets** tab. "A day" follows the Google Sheet's time zone (**File → Settings → Time zone**), so check it is set to Perth. To give a student another Reset today, delete their row for today from the Resets tab.
-- The Sheet restocks a student's purchases automatically if their balance would go below zero (e.g. a stage change archives results) or if `version` in `data/supermarket.js` changes.
+- The Sheet restocks a student's purchases automatically if their balance would go below zero (e.g. a stage change archives results) or if `version` in `data/supermarket.json` changes.
 
 ## Hosting on GitHub Pages
 
-1. Create a repository and upload everything in this folder **except `apps-script`** (keep the `css`, `js` and `data` folders).
-2. **Settings → Pages**: Source *Deploy from a branch*, branch `main`, folder `/ (root)`, then Save.
-3. The site appears at `https://<username>.github.io/<repository>/` after a minute or two.
+1. Build the site with `npm run build`.
+2. Configure Pages to publish the generated `dist/` artifact using GitHub Actions.
+3. Keep `apps-script` and other private credentials out of the published artifact.
 
 The browser tab and the iPad home-screen icon are both named **Spelling Time**.
 
@@ -140,3 +100,10 @@ The browser tab and the iPad home-screen icon are both named **Spelling Time**.
 - **Activities**: Room, Term, Activities (the switched-on activities), UpdatedAt. No row for a term means every activity is on.
 - **Purchases**: Room, ClassNumber, Student, ItemId, Price, CatalogVersion, Timestamp
 - **Resets**: Room, ClassNumber, Student, Day, Timestamp (one row each time a student uses the fridge Reset)
+
+## Local development
+Run `npm ci`, then `npm run dev` and open `http://127.0.0.1:4173`. Stop the server with Ctrl+C.
+
+Run `npm run check` for TypeScript validation, `npm run build` for a production build, and `npm test` for Playwright browser tests. Install the local browser once with `npx playwright install chromium`; CI installs it automatically.
+
+App code lives in `src/` and is split into React features, shared components, and typed API/data adapters. Raw curriculum datasets remain in `data/`.

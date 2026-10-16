@@ -3,15 +3,25 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main # Change this to master if your default branch is master
+      - main
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Required security permissions for first-party GitHub Pages deployments
 permissions:
-  contents: write
+  contents: read    # To checkout code
+  pages: write       # To deploy to Pages
+  id-token: write    # To verify the deployment source
+
+# Ensures that only one deployment runs at a time to prevent conflicts
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +31,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-size: 24 # Uses the latest LTS node version
+          node-version: 24
           cache: 'npm'
 
       - name: Install Dependencies
@@ -30,8 +40,12 @@ jobs:
       - name: Build Project
         run: npm run build
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: dist # Change to 'build' or 'out' depending on your framework
-          branch: gh-pages # The branch the action will deploy to
+          # Change "dist" if your framework builds to "build" or "out"
+          path: ./dist 
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

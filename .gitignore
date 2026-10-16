@@ -1,0 +1,10 @@
+node_modules/
+apps-script/
+playwright-report/
+test-results/
+coverage/
+dist/
+.DS_Store
+.env
+.env.*
+!.env.example

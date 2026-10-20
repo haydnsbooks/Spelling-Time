@@ -18,7 +18,7 @@ Spelling activities for PLD Stages 2–6: word list (tap a word for its pop-up),
 | `data/dictionary.js` | Real words allowed as guesses in Ice Blocks | To allow an extra word (add it to `EXTRA`) |
 | `version.json` | The newest app version number | Every time you upload an update |
 
-`apps-script/Code.gs` is the Google Apps Script. **Don't upload it to GitHub**: once your teacher password is in it, it belongs only in the Google Sheet (Extensions → Apps Script).
+`Code.gs` is the Google Apps Script. **Don't upload it to GitHub**: once your teacher password is in it, it belongs only in the Google Sheet (Extensions → Apps Script).
 
 ## Open Student Activities (teacher, for the smartboard)
 
@@ -67,6 +67,7 @@ If the two don't match, everyone gets the update pop-up every time they log in, 
 1. Open the old Code.gs and copy your teacher password.
 2. Paste the new `Code.gs` over everything, then put your password into `TEACHER_PASSWORD` at the top.
 3. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** The URL stays the same.
+4. Reload the Google Sheet once. A **Spelling Time** menu appears next to Help (see *If you edit the sheet by hand* below).
 
 ## If logins stop working
 
@@ -76,20 +77,41 @@ If the two don't match, everyone gets the update pop-up every time they log in, 
 4. **"That password is not right"** for the teacher: check `TEACHER_PASSWORD` at the top of Code.gs, then deploy a new version.
 5. **"The Google Sheet didn't answer"**, **"took too long to answer"** or **"is busy with lots of students at once"**: see the next section.
 
-## When the whole class uses it at once
+## When lots of students use it at once
 
-Google lets the Apps Script run at most **30 requests at the same time** for one Google account, and because the web app runs as you (*Execute as: Me*), every iPad's requests count towards your account. When too many arrive together, Google turns the extra ones away and the app can't read why.
+Google lets the Apps Script run at most **30 requests at the same time** for one Google account, and because the web app runs as you (*Execute as: Me*), every iPad's requests count towards your account, across every class using the app. When too many arrive together, Google turns the extra ones away and the app can't read why. The app and the Apps Script do three things to stay under that limit.
 
-The app keeps the class under that limit:
+**1. Fewer requests from each iPad**
 
-- Each student screen (activities menu, trophy cabinet, supermarket, fridge) gets everything it needs in **one request** (`studentSync`), which also saves any results waiting on the iPad. Opening another screen within 15 seconds reuses that answer instead of asking again.
-- An iPad never sends more than 2 requests at once, and the activities menu and trophy cabinet wait a random moment (up to about 1 second) so a whole class opening the app together doesn't all ask in the same second.
-- A request that fails because the sheet is busy or didn't answer is **tried again automatically** (up to twice, after a short random wait) before the student sees a message.
-- Only requests that change the sheet (saving results, buying, Reset, passwords, teacher changes) wait their turn to write. Reading never waits.
+- Each student screen (activities menu, trophy cabinet, supermarket, fridge) gets everything it needs in **one request** (`studentSync`). Opening another screen within **1 minute** reuses that answer instead of asking again. The student's own new results and medals still show straight away, because the iPad already knows about them.
+- **Finished activities are saved in batches.** A result is kept on the iPad (so the tile turns green and the medal shows straight away) and sent to the Google Sheet **45 to 90 seconds later**, together with any other activities finished in the meantime. Each iPad picks its own random moment, so a class finishing together doesn't all send at once. Results also go with any other request the student's screens make, and are sent straight away when the student opens the **supermarket** or **fridge** (so the Fremantium from them can be spent) or **logs out**. If the iPad is offline or the sheet is busy, they wait on the iPad and are tried again a minute or two later, and again next time the app opens.
+- An iPad never sends more than 2 requests at once, and the activities menu and trophy cabinet wait a random moment (up to 3 seconds) so a whole class opening the app together doesn't all ask in the same second.
 
-The message a student sees now says which problem it was: no internet on the iPad, the sheet took too long, the sheet didn't answer (usually too many at once) or the sheet was busy. If one keeps appearing when only a few students are on, open **Executions** in Apps Script to see the failed runs and their error.
+Because of the batching, **See Student Progress can be up to about 2 minutes behind** what students have just finished. Tap **Refresh** to load it again.
 
-If the new app is uploaded before the new Code.gs is deployed, it still works: it notices the old Apps Script and uses the old one-thing-at-a-time requests (slower, but nothing breaks). Deploy the new Code.gs to get the full benefit.
+**2. Retries spread out**
+
+A request that fails because the sheet is busy or didn't answer is **tried again automatically** (up to twice) before the student sees a message. The wait before each retry is random and gets longer each time (about 1.5 to 6 seconds, then 4 to 16 seconds), so a whole class doesn't try again at the same moment.
+
+**3. Faster answers from the Apps Script**
+
+The slowest thing the Apps Script does is read a whole tab, and the Results tab grows all year. So the Apps Script now keeps **saved copies** (Google's CacheService) of what each student's screens need: their best score for each activity, their purchases and Reset day, and each room's stages and activity settings. It only reads the sheet when a copy is missing, and Google keeps a copy for at most 6 hours. Every change made through the app (saving results, buying, Reset, setting stages or activities) updates the saved copies straight away. Saving results also no longer reads the whole Results tab first. Shorter requests mean fewer are running at the same moment.
+
+Only requests that change the sheet (saving results, buying, Reset, passwords, teacher changes) wait their turn to write. Reading never waits. The teacher's **See Student Progress** page still reads the Results tab itself, so it is always up to date with what has been saved.
+
+To check the saved copies are working, open the web app URL in a browser: it shows `"cache":"on"`.
+
+If a message keeps appearing when only a few students are on, open **Executions** in Apps Script to see the failed runs and their error.
+
+## If you edit the sheet by hand
+
+Because of the saved copies, a change you make **directly in the Google Sheet** (for example deleting some results, or changing a stage in the Stages tab instead of using Set Student Stages) may not show in the app for up to 6 hours. To make it show straight away, use the menu **Spelling Time → Refresh the app's saved copies** in the Google Sheet. The first time, Google asks you to allow the script to run: choose your account and allow it.
+
+The Apps Script also tries to do this automatically whenever the sheet is edited by hand, but Google may not allow that kind of automatic trigger to reach the saved copies, so use the menu to be sure.
+
+- **Clearing a student's password** doesn't need the menu: passwords are always read straight from the sheet.
+- **Deleting a student's row in the Resets tab** (to give them another Reset today) does need the menu afterwards.
+- Anything done through the app, teacher pages included, never needs it.
 
 ## Student passwords
 
@@ -120,12 +142,12 @@ Changing a term's activities recalculates medals and **restocks every student's 
 - **Supermarket:** 6 aisles (tabs), each with 4 shelves. The dearest items are on the top shelf and the cheapest are on the bottom. There's one of each item, 96 in total.
 - The prices add up to **648**, which is 36 weeks × 18. So a student can only buy everything by getting gold in every week of the year.
 - **Fridge:** each aisle has its own compartment (freezer, top shelf, middle shelf, fruit drawer, veggie drawer, door shelves). Items not bought yet show as grey silhouettes.
-- **Reset** puts everything back on the shelves and gives all the Fremantium back. **Each student can use Reset once a day.** After that the button is greyed out with a note saying they can reset again tomorrow. Each use is logged in the **Resets** tab. "A day" follows the Google Sheet's time zone (**File → Settings → Time zone**), so check it is set to Perth. To give a student another Reset today, delete their row for today from the Resets tab.
+- **Reset** puts everything back on the shelves and gives all the Fremantium back. **Each student can use Reset once a day.** After that the button is greyed out with a note saying they can reset again tomorrow. Each use is logged in the **Resets** tab. "A day" follows the Google Sheet's time zone (**File → Settings → Time zone**), so check it is set to Perth. To give a student another Reset today, delete their row for today from the Resets tab, then use **Spelling Time → Refresh the app's saved copies**.
 - The Sheet restocks a student's purchases automatically if their balance would go below zero (e.g. a stage change archives results) or if `version` in `data/supermarket.js` changes.
 
 ## Hosting on GitHub Pages
 
-1. Create a repository and upload everything in this folder **except `apps-script`** (keep the `css`, `js` and `data` folders).
+1. Create a repository and upload everything in this folder (keep the `css`, `js` and `data` folders). Don't upload `Code.gs`.
 2. **Settings → Pages**: Source *Deploy from a branch*, branch `main`, folder `/ (root)`, then Save.
 3. The site appears at `https://<username>.github.io/<repository>/` after a minute or two.
 

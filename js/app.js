@@ -15,7 +15,7 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-10-15.4';
+const APP_VERSION = '2026-10-20.1';
 const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js','data/dictionary.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
@@ -75,9 +75,12 @@ let screenAC=null;           // aborts screen-level listeners on navigation
 /* ---------- Google Sheet connection ----------
    Google runs at most 30 Apps Script requests at the same time for one account, and every iPad's
    requests count towards the teacher's account. So: each student screen asks for everything in ONE
-   request (see sync below), an iPad never sends more than 2 requests at once, and a request that
-   fails because the sheet is busy is tried again after a short random wait. */
+   request (see sync below), finished activities are saved in batches rather than one request each
+   (see saving results in batches below), an iPad never sends more than 2 requests at once, and a
+   request that fails because the sheet is busy is tried again after a random wait that gets longer
+   each time, so a whole class doesn't try again at the same moment. */
 const API_TIMEOUT=30000, API_RETRIES=2, API_MAX_ACTIVE=2;
+const API_RETRY_WAIT=[3000,8000];                   // average wait before the 1st and 2nd retry (each is spread from half to double this)
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let apiActive=0; const apiWaiting=[];
 async function apiSlot(){ if(apiActive>=API_MAX_ACTIVE) await new Promise(r=>apiWaiting.push(r)); apiActive++; }
@@ -119,7 +122,8 @@ const API={
         const retry=e.reason==='timeout' ? attempt<1        // a request that timed out is only tried once more
           : attempt<API_RETRIES && (e.kind==='busy' || (e.kind==='network' && ['blocked','http'].includes(e.reason)));
         if(!retry) throw e;
-        await sleep((attempt?4000:1500)+Math.random()*3000);   // spread the class out so they don't all try again at once
+        const base=API_RETRY_WAIT[Math.min(attempt,API_RETRY_WAIT.length-1)];
+        await sleep(base*(0.5+Math.random()*1.5));   // a random wait, so the class doesn't all try again at once
       }
     }
   },
@@ -172,16 +176,56 @@ function recordResult(activity,score,total){
     room:S.room,classNumber:S.classNumber,student:S.student,term:S.term,stage:S.stage,week:S.week,list:(weekData()||{}).l||'',activity,score,total};
   markDone(rec);
   const q=store.get(PEND_KEY,[]); q.push(rec); store.set(PEND_KEY,q);
-  flushResults();
+  scheduleFlush();                                   // saved with the next batch, not straight away
 }
+
+/* ---------- saving results in batches ----------
+   A finished activity is kept on the iPad (it counts for medals straight away) and sent to the
+   Google Sheet a little later, together with any others finished in the meantime. Every iPad picks
+   its own random moment, so a class finishing together doesn't all send at once. Results also go
+   with any other request the student's screens make, and are sent straight away when the student
+   opens the supermarket or fridge, or logs out. If the iPad goes offline they wait and are sent later. */
+const BATCH_MIN_MS=45000, BATCH_SPREAD_MS=45000;    // the first try is 45 to 90 seconds after an activity is finished
+const BATCH_RETRY_MS=90000;                         // after a failed try, about 1 to 2 minutes
+let batchTimer=null, batchDue=0;
+function pendingCount(){ return store.get(PEND_KEY,[]).length; }
+function scheduleFlush(ms){
+  if(S.demo) return;
+  if(ms==null) ms=BATCH_MIN_MS+Math.random()*BATCH_SPREAD_MS;
+  const due=Date.now()+ms;
+  if(batchTimer&&batchDue<=due) return;              // a batch is already on its way sooner
+  if(batchTimer) clearTimeout(batchTimer);
+  batchDue=due;
+  batchTimer=setTimeout(()=>{ batchTimer=null; flushResults(); },ms);
+}
+function clearFlush(){ if(batchTimer) clearTimeout(batchTimer); batchTimer=null; }
 /* send results waiting on this iPad (and get everything else back in the same request) */
-function flushResults(){ return sync({force:true}).catch(()=>false); }
+async function flushResults(){
+  if(!pendingCount()) return true;
+  if(!API.has()) return false;
+  try{
+    if(S.authed&&!S.demo) await sync({force:true});
+    else await sendOrphans();
+  }catch(e){}
+  if(pendingCount()) scheduleFlush(BATCH_RETRY_MS*(0.75+Math.random()*0.75));
+  return !pendingCount();
+}
+/* results left on the iPad by someone who has logged out: send them on their own */
+async function sendOrphans(){
+  const list=store.get(PEND_KEY,[]); if(!list.length||!API.has()) return;
+  const j=await API.post({action:'addResults',results:list});
+  dropPending(j.saved);
+}
+window.addEventListener('pagehide',()=>{ clearFlush(); });   // the results stay on the iPad and are sent next time
+window.addEventListener('pageshow',e=>{ if(e.persisted&&pendingCount()) scheduleFlush(3000+Math.random()*12000); });
 
 /* ---------- sync: everything a student's screens need, in ONE request ----------
    Sends any results waiting on this iPad and gets back the student's stages, results (every term),
    the activities switched on and their Fremantium wallet. Screens opened again within SYNC_FRESH_MS
-   reuse the last answer, so moving between screens doesn't keep asking the Google Sheet. */
-const SYNC_FRESH_MS=15000;
+   reuse the last answer, so moving between screens doesn't keep asking the Google Sheet (the iPad
+   already knows about the student's own new results, so their medals still show straight away).
+   force: ask now no matter what.  flush: ask now if there are results waiting to be saved. */
+const SYNC_FRESH_MS=60000;
 let syncP=null, syncQ=null, lastSync=0, lastSyncWho='', legacyApi=false, syncSending=new Set();
 function dropPending(ids){
   if(!ids||!ids.length) return;
@@ -223,16 +267,17 @@ async function legacySync(){
   j.wallet=await API.get({action:'getWallet',room,classNumber:cn,catalogVersion:SHOP.version});
   return j;
 }
-function sync({force=false,jitter=false}={}){
+function sync({force=false,flush=false,jitter=false}={}){
   if(!API.has()||!S.authed) return Promise.resolve(false);
   const who=walletId(), pending=store.get(PEND_KEY,[]).some(r=>!syncSending.has(String(r.id)));   // results not already on their way
+  const now=force||(flush&&pending);
   if(syncP){
-    if(!force&&!pending) return syncP;              // already asking: share the same answer
+    if(!now) return syncP;                           // already asking: share the same answer
     return syncQ=syncQ||syncP.catch(()=>{}).then(()=>{ syncQ=null; return sync({force:true}); });
   }
-  if(!force&&!pending&&lastSyncWho===who&&Date.now()-lastSync<SYNC_FRESH_MS) return Promise.resolve(true);
+  if(!now&&lastSyncWho===who&&Date.now()-lastSync<SYNC_FRESH_MS) return Promise.resolve(true);
   syncP=(async()=>{
-    if(jitter) await sleep(Math.random()*1200);      // a class opening the app together doesn't all ask in the same second
+    if(jitter) await sleep(Math.random()*3000);      // a class opening the app together doesn't all ask in the same second
     let j;
     if(!legacyApi){
       const sent=store.get(PEND_KEY,[]); syncSending=new Set(sent.map(r=>String(r.id)));
@@ -240,6 +285,7 @@ function sync({force=false,jitter=false}={}){
       catch(e){ if(e.kind==='server'&&/Unknown action/.test(e.message)) legacyApi=true; else throw e; }
     }
     if(legacyApi) j=await legacySync();
+    if(!pendingCount()) clearFlush();                // everything is saved, so the waiting batch has nothing to send
     if(!S.authed||walletId()!==who) return false;    // logged out while waiting
     applySync(j); lastSync=Date.now(); lastSyncWho=who;
     return true;
@@ -463,7 +509,12 @@ topbar.addEventListener('click',e=>{
 });
 document.addEventListener('click',e=>{ if(!e.target.closest('.tb')) closeDD(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDD(); });
-function logout(){ stopAll(); S=Object.assign({},BLANK); teacher=null; wallet=null; try{localStorage.removeItem(SESSION_KEY);}catch(e){} go('role'); }
+function logout(){
+  stopAll(); clearFlush();
+  S=Object.assign({},BLANK); teacher=null; wallet=null; try{localStorage.removeItem(SESSION_KEY);}catch(e){}
+  if(pendingCount()) flushResults();                 // results still waiting on this iPad are sent now
+  go('role');
+}
 
 /* ---------- router ---------- */
 let timers=[]; function clearTimers(){ timers.forEach(t=>{clearInterval(t);clearTimeout(t);}); timers=[]; }
@@ -1036,7 +1087,8 @@ SCREENS.shop=function(arg){
     }
     finally{ busy=false; }
   };
-  async function refresh(){ try{ await refreshWallet(); status='ready'; }catch(e){ status='offline'; } draw(); }
+  // results still waiting on the iPad are saved first, so the Fremantium from them can be spent
+  async function refresh(){ try{ await refreshWallet({flush:true}); status='ready'; }catch(e){ status='offline'; } draw(); }
   draw(); if(API.has()) refresh();
 };
 
@@ -1116,7 +1168,7 @@ SCREENS.fridge=function(){
     }
   };
   draw();
-  if(API.has()) refreshWallet().then(()=>{ status='ready'; draw(); }).catch(()=>{ status='offline'; draw(); });
+  if(API.has()) refreshWallet({flush:true}).then(()=>{ status='ready'; draw(); }).catch(()=>{ status='offline'; draw(); });
 };
 
 /* ---------- celebration pop-ups ----------
@@ -2303,7 +2355,8 @@ const ACTS={
 };
 
 /* ---------- boot ---------- */
-flushResults();
+// results left on this iPad from last time are sent a few seconds after the app opens (each iPad at a different moment)
+if(pendingCount()) scheduleFlush(3000+Math.random()*12000);
 loadWallet();
 if(S.role!=='student'||!S.student||!S.authed) go('role');
 else if(['shop','fridge'].includes(S.screen)){ go(S.screen); if(S.term) resolveStage(); }

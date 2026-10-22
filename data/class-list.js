@@ -1010,6 +1010,13 @@ window.CLASS_LISTS = [
         "lastName": "Yang",
         "displayName": "Annie Yang",
         "yearLevel": null
+      },
+      {
+        "classNumber": 23,
+        "firstName": "Krshang",
+        "lastName": "Rao",
+        "displayName": "Krshang Rao",
+        "yearLevel": null
       }
     ]
   }

@@ -10,7 +10,7 @@ Spelling activities for PLD Stages 2–6: word list (tap a word for its pop-up),
 | `css/styles.css` | Look and layout | To change colours or sizes |
 | `js/app.js` | How the app works | For new features |
 | `js/config.js` | Google Sheet link | If the web app URL changes |
-| `data/class-list.js` | Rooms and students (Rooms 9, 10, 11, 12 and 16) | When a class changes or a room is added |
+| `data/class-list.js` | Rooms and students (Rooms 8, 9, 10, 11, 12 and 16) | When a class changes or a room is added |
 | `data/pld-data.js` | PLD word lists, week index and passages | Only if the PLD data changes |
 | `data/content.js` | Definitions and cloze sentences for every week of Stages 2–6 | To change a definition or sentence |
 | `data/word-info.js` | The word pop-up for every list word in Stages 2–6 (emoji, definition, part of speech, synonyms, antonyms, root, word family, prefixes and suffixes) | To change what a word's pop-up says |

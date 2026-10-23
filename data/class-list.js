@@ -1019,5 +1019,207 @@ window.CLASS_LISTS = [
         "yearLevel": null
       }
     ]
+  },
+  {
+    "room": "Room 8",
+    "yearLevels": [],
+    "students": [
+      {
+        "classNumber": 1,
+        "firstName": "Iris",
+        "lastName": "Bian",
+        "displayName": "Iris Bian",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 2,
+        "firstName": "Eve",
+        "lastName": "Chooi",
+        "displayName": "Eve Chooi",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 3,
+        "firstName": "Maia",
+        "lastName": "Chopra",
+        "displayName": "Maia Chopra",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 4,
+        "firstName": "Asher",
+        "lastName": "Deng",
+        "displayName": "Asher Deng",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 5,
+        "firstName": "Athreya",
+        "lastName": "Dravid",
+        "displayName": "Athreya Dravid",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 6,
+        "firstName": "Gao",
+        "lastName": "Jeffrey",
+        "displayName": "Gao Jeffrey",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 7,
+        "firstName": "Sophie",
+        "lastName": "Goncharov",
+        "displayName": "Sophie Goncharov",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 8,
+        "firstName": "Ben",
+        "lastName": "Greef",
+        "displayName": "Ben Greef",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 9,
+        "firstName": "Miles",
+        "lastName": "Hart",
+        "displayName": "Miles Hart",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 10,
+        "firstName": "Ava",
+        "lastName": "He",
+        "displayName": "Ava He",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 11,
+        "firstName": "Tam",
+        "lastName": "Hong",
+        "displayName": "Tam Hong",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 12,
+        "firstName": "Elias",
+        "lastName": "Ivanescu",
+        "displayName": "Elias Ivanescu",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 13,
+        "firstName": "Kuenga Jigme",
+        "lastName": "Jigme",
+        "displayName": "Kuenga Jigme Jigme",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 14,
+        "firstName": "Emma",
+        "lastName": "Kong",
+        "displayName": "Emma Kong",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 15,
+        "firstName": "Asha",
+        "lastName": "Kuppasamy",
+        "displayName": "Asha Kuppasamy",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 16,
+        "firstName": "Isabel",
+        "lastName": "Lavagna-Slater",
+        "displayName": "Isabel Lavagna-Slater",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 17,
+        "firstName": "Ruiqi",
+        "lastName": "Lin",
+        "displayName": "Ruiqi Lin",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 18,
+        "firstName": "Alastair",
+        "lastName": "Lowe",
+        "displayName": "Alastair Lowe",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 19,
+        "firstName": "Samuel",
+        "lastName": "Lui",
+        "displayName": "Samuel Lui",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 20,
+        "firstName": "Lexi",
+        "lastName": "Mamas",
+        "displayName": "Lexi Mamas",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 21,
+        "firstName": "Kayla",
+        "lastName": "Panizza",
+        "displayName": "Kayla Panizza",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 22,
+        "firstName": "Ethan",
+        "lastName": "Stringer",
+        "displayName": "Ethan Stringer",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 23,
+        "firstName": "Rinchen Pedlon",
+        "lastName": "Tenzin",
+        "displayName": "Rinchen Pedlon Tenzin",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 24,
+        "firstName": "Holly",
+        "lastName": "Thorstensen",
+        "displayName": "Holly Thorstensen",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 25,
+        "firstName": "Hugo",
+        "lastName": "Thostensen",
+        "displayName": "Hugo Thostensen",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 26,
+        "firstName": "Lucas",
+        "lastName": "Tyrell",
+        "displayName": "Lucas Tyrell",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 27,
+        "firstName": "Evan",
+        "lastName": "Zhang",
+        "displayName": "Evan Zhang",
+        "yearLevel": null
+      },
+      {
+        "classNumber": 28,
+        "firstName": "Elsa",
+        "lastName": "Zhang",
+        "displayName": "Elsa Zhang",
+        "yearLevel": null
+      }
+    ]
   }
 ];

@@ -15,7 +15,7 @@ const SHOP = window.SUPERMARKET || {version:0,aisles:[]};
    When you upload a new version to GitHub, change APP_VERSION here AND "version" in version.json
    to the same new value (e.g. the date plus a number). When a login button is pressed, the app
    compares the two; if the iPad is running an older copy, it asks the student/teacher to update. */
-const APP_VERSION = '2026-11-18.2';
+const APP_VERSION = '2026-11-20.1';
 const APP_FILES = ['index.html','css/styles.css','js/app.js','js/config.js','data/class-list.js','data/pld-data.js','data/content.js','data/word-info.js','data/supermarket.js','data/dictionary.js'];
 async function latestVersion(){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),5000);
@@ -73,7 +73,7 @@ function save(){ if(S.role==='student'&&!S.demo) store.set(SESSION_KEY,S); }   /
 let teacher=null;            // {room,password} – kept in memory only, never saved on the device
                              // relief teacher: {room:RELIEF,relief:true}, with no teacher password at all
 const RELIEF='Relief Teacher';   // the extra choice in the teacher log in: student view only
-const TEACHER_ONLY=['teacherHome','stagesTerm','stagesBoard','actsTerm','actsBoard','teacherData','resetPw'];
+const TEACHER_ONLY=['teacherHome','stagesTerm','stagesBoard','actsTerm','actsBoard','teacherData','resetPw','bonusSet'];
 let screenAC=null;           // aborts screen-level listeners on navigation
 
 /* ---------- Google Sheet connection ----------
@@ -138,7 +138,22 @@ const API={
 /* ---------- progress (assessed activities) ---------- */
 const ALL_ACTS=['wordlist','passage','testEasy','defEasy','clozeEasy','editing','dictation','testHard','defHard','clozeHard'];
 const ASSESSED=['testEasy','defEasy','clozeEasy','testHard','defHard','clozeHard'];
-const DONE_KEY='pldSpell.done.v2', PEND_KEY='pldSpell.pending.v1', STAGE_KEY='pldSpell.stages.v1', ACTS_KEY='pldSpell.acts.v1';
+const DONE_KEY='pldSpell.done.v2', PEND_KEY='pldSpell.pending.v1', STAGE_KEY='pldSpell.stages.v1', ACTS_KEY='pldSpell.acts.v1', SET_KEY='pldSpell.settings.v1';
+
+/* ---------- room settings (Teacher → Bonus Zone Settings) ----------
+   bonusOn:   false hides the Bonus Zone from the room's students
+   bonusRule: 'week' = gold in the current week opens the Bonus Zone (with no current week set: the week being viewed)
+              'term' = gold in every week of the current term, from Week 1 up to the current week
+                       (only weeks with lessons for the student's stage count)
+   curTerm, curWeek: the current term and week, set by the teacher. Once open, the Bonus Zone shows on every
+                     week's page and its games use words up to this week.                                  */
+const SETTINGS_DEFAULT={bonusOn:true,bonusRule:'week',curTerm:null,curWeek:null};
+function cleanSettings(o){
+  o=o||{}; const t=+o.curTerm, w=+o.curWeek;
+  return {bonusOn:o.bonusOn!==false&&o.bonusOn!=='false',bonusRule:o.bonusRule==='term'?'term':'week',
+          curTerm:t>=1&&t<=4?t:null,curWeek:w>=1&&w<=9?w:null};
+}
+function roomSettings(room){ return cleanSettings(Object.assign({},SETTINGS_DEFAULT,(store.get(SET_KEY,{})[room||S.room])||{})); }
 
 /* ---------- medal rules (keep these the same as Code.gs) ----------
    Gold   = every medal activity switched on for the term is at 100%
@@ -249,6 +264,7 @@ function applySync(j){
   });
   store.set(STAGE_KEY,cache);
   const all=store.get(ACTS_KEY,{}); all[S.room]=j.activities||{}; store.set(ACTS_KEY,all);
+  if(j.settings){ const sa=store.get(SET_KEY,{}); sa[S.room]=cleanSettings(j.settings); store.set(SET_KEY,sa); }   // an older Apps Script sends no settings: the defaults are used
   if(j.wallet){
     setWallet(j.wallet);
     if(j.wallet.reset) toast(`The supermarket has been restocked, so you have ${wallet.balance} Fremantium to spend again.`);
@@ -677,14 +693,54 @@ SCREENS.teacherHome=function(msg){
   <button class="tile" id="setActs"><span class="ic" aria-hidden="true">☑️</span><span class="nm">Set Activities</span></button>
   <button class="tile" id="seeProg"><span class="ic" aria-hidden="true">📊</span><span class="nm">See Student Progress</span></button>
   <button class="tile" id="stuView"><span class="ic" aria-hidden="true">🖥️</span><span class="nm">Open Student Activities</span></button>
-  <button class="tile" id="resetPw"><span class="ic" aria-hidden="true">🔑</span><span class="nm">Reset a Password</span></button></div>`;
+  <button class="tile" id="resetPw"><span class="ic" aria-hidden="true">🔑</span><span class="nm">Reset a Password</span></button>
+  <button class="tile" id="bzSet"><span class="ic" aria-hidden="true">⚡</span><span class="nm">Bonus Zone Settings</span></button></div>`;
   $('#out').onclick=()=>{ teacher=null; go('role'); };
   $('#setSt').onclick=()=>go('stagesTerm');
   $('#setActs').onclick=()=>go('actsTerm');
   $('#seeProg').onclick=()=>go('teacherData');
   $('#stuView').onclick=()=>go('demoPick');
   $('#resetPw').onclick=()=>go('resetPw');
+  $('#bzSet').onclick=()=>go('bonusSet');
   if(msg) toast(msg);
+};
+/* ---------- teacher: Bonus Zone settings (room settings, see near the top) ---------- */
+SCREENS.bonusSet=function(){
+  if(!teacher) return go('teacherLogin');
+  app.innerHTML=`<div class="act-head"><div><div class="crumb">${esc(teacher.room)}</div><h2>Bonus Zone settings</h2></div><button class="btn small" id="back">Back</button></div>
+  <div id="body"><p class="muted centre">Loading…</p></div>`;
+  $('#back').onclick=()=>go('teacherHome');
+  const opt=(k,v,label,cur)=>`<button class="btn${cur===v?' sel':''}" data-k="${k}" data-v="${v}" aria-pressed="${cur===v}">${label}</button>`;
+  function draw(set){
+    const term=set.bonusRule==='term';
+    $('#body').innerHTML=`
+    <div class="cal-group centre"><h3>Bonus Zone</h3><div class="btnrow" style="justify-content:center">${opt('bonusOn','1','Allow',set.bonusOn?'1':'0')}${opt('bonusOn','0','Don\'t allow',set.bonusOn?'1':'0')}</div>
+      <p class="muted">${set.bonusOn?'Students can open the Bonus Zone once they earn it.':'The Bonus Zone is hidden from your students.'}</p></div>
+    <div class="cal-group centre" ${set.bonusOn?'':'style="opacity:.45"'}><h3>When does it open?</h3><div class="btnrow" style="justify-content:center">${opt('bonusRule','week','🥇 Gold for the week',set.bonusRule)}${opt('bonusRule','term','🥇 Gold for the term',set.bonusRule)}</div>
+      <p class="muted">${term?'Students need gold in every week of the current term, from Week 1 up to the current week below. Weeks with no lessons for their stage are skipped.':'Students need gold in the current week below. Gold in an earlier week doesn\'t open it.'} Once open, the Bonus Zone shows on every week's page, and its games use words up to the current week.</p></div>
+    <div class="cal-group centre"><h3>Current term</h3><div class="btnrow" style="justify-content:center">${[1,2,3,4].map(t=>opt('curTerm',String(t),t,String(set.curTerm))).join('')}</div></div>
+    <div class="cal-group centre"><h3>Current week</h3><div class="btnrow" style="justify-content:center">${[1,2,3,4,5,6,7,8,9].map(w=>opt('curWeek',String(w),w,String(set.curWeek))).join('')}</div>
+      <p class="muted">Change it each week as the term goes on.</p></div>
+    <div class="fb bad centre" id="err" role="alert"></div>
+    <div class="tools"><button class="btn primary" id="save">Save</button></div>`;
+    $('#body').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{
+      const k=b.dataset.k, v=b.dataset.v;
+      if(k==='bonusOn') set.bonusOn=v==='1'; else if(k==='bonusRule') set.bonusRule=v; else set[k]=+v;
+      draw(set);
+    });
+    $('#save').onclick=async()=>{
+      const err=$('#err'); err.textContent='';
+      if(set.bonusOn&&!(set.curTerm&&set.curWeek)){ err.textContent='Choose the current term and week.'; return; }
+      const btn=$('#save'); btn.disabled=true; btn.textContent='Saving…';
+      try{
+        await API.post({action:'setSettings',password:teacher.password,room:teacher.room,bonusOn:set.bonusOn,bonusRule:set.bonusRule,curTerm:set.curTerm||'',curWeek:set.curWeek||''});
+        go('teacherHome',!set.bonusOn?'Bonus Zone switched off.':set.bonusRule==='term'?`Bonus Zone: gold in every week of Term ${set.curTerm} up to Week ${set.curWeek}.`:`Bonus Zone: gold in Term ${set.curTerm} Week ${set.curWeek}.`);
+      }catch(e){ err.textContent=/Unknown action/.test(e.message)?'The Apps Script needs updating: paste in the new Code.gs and deploy a new version.':e.message; btn.disabled=false; btn.textContent='Save'; }
+    };
+  }
+  API.get({action:'getSettings',room:teacher.room})
+    .then(j=>{ if(S.screen==='bonusSet') draw(cleanSettings(Object.assign({},SETTINGS_DEFAULT,j.settings||{}))); })
+    .catch(e=>{ if(S.screen==='bonusSet') $('#body').innerHTML='<div class="notice">'+esc(e.message)+(/Unknown action/.test(e.message)?' The Apps Script needs updating: paste in the new Code.gs and deploy a new version.':'')+'</div>'; });
 };
 /* ---------- teacher: reset a student's password ----------
    Only the students in the room the teacher logged into are listed, and the Apps Script checks the
@@ -1053,8 +1109,9 @@ SCREENS.menu=function(){
       :`<h2 class="wk">Week ${S.week} ${medalHTML(med)}</h2>
        <p class="muted" style="margin:0">Stage ${S.stage}, Term ${S.term}${w.l?`, List ${w.l}`:''}</p>
        <p class="medalkey">${medalRule(medalActs(S.term).length)}</p>`;
-    const bonus=w&&(S.demo||med==='gold')&&bonusPool().length;   // the Bonus Zone opens once the week is gold
-    app.innerHTML=(bonus?bonusBtnHTML():'')+`<div class="intro">${intro}</div>`+MENU_ROWS.map(row).join('');
+    const bz=w?bonusState():null, bonus=bz&&bz.open&&bonusPool().length;   // see Bonus Zone below for when it opens
+    const bzHint=w&&!S.demo&&bz&&bz.on&&!bz.open&&bz.hint?`<p class="medalkey bz-hint"><span aria-hidden="true">⚡</span> ${bz.hint}</p>`:'';
+    app.innerHTML=(bonus?bonusBtnHTML():'')+`<div class="intro">${intro}${bzHint}</div>`+MENU_ROWS.map(row).join('');
     app.querySelectorAll('.tile').forEach(t=>t.onclick=()=>go(t.dataset.a));
     const bb=$('#bonusBtn'); if(bb) bb.onclick=()=>go('bonus');
   }
@@ -1953,7 +2010,10 @@ function actDictation(){
 }
 
 /* ---------- Bonus Zone ----------
-   Opens once a student has gold for the week they are on (always open in teacher view).
+   The teacher chooses in Bonus Zone Settings (see room settings near the top) whether the Bonus Zone is
+   switched on, and whether it opens with gold in the current week, or only with gold in every week of the
+   current term up to the current week. Gold in an earlier week doesn't open it. Once open it shows on every
+   week's page, and the games use words up to the current week. It is always open in teacher view.
    Just for fun: nothing here is sent to the Google Sheet. The words come from every list the student
    has had this year: every week of the earlier terms (in the stage they had that term) and this term
    up to the week they are on. Let it Go keeps each student's highest balloon on the iPad only.
@@ -2032,14 +2092,48 @@ function hsInner(game){
 function hsBox(game,title){ return `<section class="hs-box" data-hs="${game}" aria-label="${esc(HS_GAMES[game].name)} high scores"><h3 class="hs-h">${title||'<span aria-hidden="true">🏆</span> This week\'s high scores'}</h3><div class="hs-in">${hsInner(game)}</div></section>`; }
 function hsFill(){ app.querySelectorAll('[data-hs]').forEach(el=>{ const i=el.querySelector('.hs-in'); if(i) i.innerHTML=hsInner(el.dataset.hs); }); }
 function hsShow(){ hsLoad().then(()=>hsFill()); }
-function bonusOK(){ return S.role==='student'&&!!weekData()&&(S.demo||medalFromDone(weekDone(),S.term)==='gold'); }
+/* {on, open, rule, why, hint}: why is the line shown in the Bonus Zone, hint is shown on the menu while it's locked */
+function bonusState(){
+  if(S.role!=='student'||!weekData()) return {on:false,open:false};
+  if(S.demo) return {on:true,open:true,why:'Just for fun.'};
+  const set=roomSettings();
+  if(!set.bonusOn) return {on:false,open:false};
+  // no current week set yet (a room that hasn't saved Bonus Zone Settings): gold for the week being viewed, as before 2026-11-19
+  if(set.bonusRule==='week'&&!(set.curTerm&&set.curWeek)){
+    const open=medalFromDone(weekDone(),S.term)==='gold';
+    return {on:true,open,rule:'week',why:`Gold for Week ${S.week}! These games are just for fun.`,hint:`Get gold this week to open the Bonus Zone.`};
+  }
+  const term=set.curTerm||S.term, last=set.curWeek||9;
+  const st=term===S.term?S.stage:stageForTerm(term);
+  const tLabel=term!==S.term?` of Term ${term}`:'';
+  if(!st||!DATA[st]) return {on:true,open:false,rule:set.bonusRule,hint:''};
+  const weeks=[]; for(let w=1;w<=last;w++) if(DATA[st].weeks[term+'-'+w]) weeks.push(w);   // weeks with lessons for this stage
+  if(!weeks.length) return {on:true,open:false,rule:set.bonusRule,hint:''};
+  if(set.bonusRule==='week'){
+    // gold in the current week (or the latest week before it that has lessons for this stage), whichever week is being viewed
+    const wk=weeks[weeks.length-1], open=weekMedal(term,st,wk)==='gold';
+    return {on:true,open,rule:'week',why:`Gold for Week ${wk}${tLabel}! These games are just for fun.`,
+      hint:`Get gold in Week ${wk}${tLabel} to open the Bonus Zone.`};
+  }
+  const gold=weeks.filter(w=>weekMedal(term,st,w)==='gold').length;
+  const open=gold===weeks.length;
+  const span=weeks.length===1?`Week ${weeks[0]}${tLabel}`:`every week of Term ${term} up to Week ${last}`;
+  return {on:true,open,rule:'term',
+    why:`Gold in ${weeks.length===1?`Term ${term} Week ${weeks[0]}`:`all ${weeks.length} weeks of Term ${term} so far`}! These games are just for fun.`,
+    hint:`The Bonus Zone opens with gold in ${span}. You have ${gold} of ${weeks.length} so far.`};
+}
+function bonusOK(){ return !!bonusState().open; }
+/* the bonus games use words up to the teacher's current term and week (Bonus Zone Settings), whichever week is
+   being viewed; with no current week set, or in teacher view, up to the week being viewed */
+function bonusUpTo(){ const set=roomSettings(); return !S.demo&&set.curTerm&&set.curWeek?{term:set.curTerm,week:set.curWeek}:{term:S.term,week:S.week}; }
 function bonusPool(){
   const seen=new Set(), out=[];
   if(!S.term||!S.week) return out;
-  for(let t=1;t<=S.term;t++){
+  const upTo=bonusUpTo();
+  for(let t=1;t<=upTo.term;t++){
     const st=(t===S.term||S.demo)?S.stage:stageForTerm(t);
     if(!st||!DATA[st]) continue;
-    const last=t===S.term?S.week:9;
+    const last=t===upTo.term?upTo.week:9;
     for(let w=1;w<=last;w++){
       const wk=DATA[st].weeks[t+'-'+w]; if(!wk||!wk.l) continue;
       const L=DATA[st].lists[wk.l]; if(!L||!L.w) continue;
@@ -2142,7 +2236,7 @@ SCREENS.bonus=function(){
   const bestLine=(g)=>{ const b=gameBest(g); return b?`<br><b>Your best: ${HS_GAMES[g].fmt(b)}</b>`:''; };
   const stLine=(g)=>streakGet(g).best?`<br><b>Best streak: ${streakGet(g).best}</b>`:'';
   app.innerHTML=`<div class="bz-hero"><div class="bz-bolt" aria-hidden="true">⚡</div><h1 class="bz-title">Bonus Zone</h1>
-    <p class="bz-sub">${S.demo?'Just for fun.':`Gold for Week ${S.week}! These games are just for fun.`} They use all <b>${pool.length}</b> words from ${S.demo?`Stage ${S.stage}, from Term 1 up to Term ${S.term} Week ${S.week}`:'your spelling lists this year'}.</p></div>
+    <p class="bz-sub">${esc(bonusState().why||'')} They use all <b>${pool.length}</b> words from ${S.demo?`Stage ${S.stage}, from Term 1 up to Term ${S.term} Week ${S.week}`:`your spelling lists this year, up to Term ${bonusUpTo().term} Week ${bonusUpTo().week}`}.</p></div>
     <div class="bz-games">
       <div class="bz-col"><button class="bz-game g-hang" data-g="bHang" ${hg?'':'disabled'}><span class="ic" aria-hidden="true">👗</span><span class="nm">Spellsa</span><span class="ds">Guess the letters before Spellsa is finished. You have ${HANG_LIVES} lives.${stLine('hang')}</span></button>${hsBox('hang')}</div>
       <div class="bz-col"><button class="bz-game g-word" data-g="bWord" ${wg?'':'disabled'}><span class="ic" aria-hidden="true">🧊</span><span class="nm">Ice Blocks</span><span class="ds">Find the secret word in ${WG_TRIES} tries, guessing real words. Cyan means the right letter in the right spot!${stLine('word')}</span></button>${hsBox('word')}</div>

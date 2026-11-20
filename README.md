@@ -40,7 +40,18 @@ For a relief teacher using the app in a lesson. On the teacher log in, choose **
 
 ## Bonus Zone
 
-When a student gets **gold** for a week, a flashing **⚡ BONUS ZONE ⚡** button appears in the top right of that week's activities page. The games are just for fun and use every word from every list the student has had this year: all 9 weeks of earlier terms (in the stage they had that term) plus this term up to the week they're on.
+When a student gets **gold** for a week, a flashing **⚡ BONUS ZONE ⚡** button appears in the top right of that week's activities page.
+
+**Teacher → Bonus Zone Settings** (one setting per room) controls when it opens:
+
+- **Allow / Don't allow**: *Don't allow* hides the Bonus Zone from the room's students.
+- **Current term** and **current week**: set these on the same page and change the week as the term goes on. Both are needed to save.
+- **Gold for the week**: the student needs gold in the **current week**. Gold in an earlier week doesn't open it (if the current week is 6, gold in Week 1 only isn't enough).
+- **Gold for the term**: the student needs gold in every week of the current term, from Week 1 up to the current week. Weeks with no lessons for the student's stage are skipped.
+- Once it's open, the Bonus Zone button shows on **every week's page**, whichever week the student is viewing, and the games use words from Term 1 up to the **current week**.
+- While it's locked, a line under the medal rule tells the student what they need (e.g. "Get gold in Week 6 to open the Bonus Zone" or "You have 4 of 6 so far").
+- A room that has never saved these settings keeps the old rule: gold for the week the student is viewing.
+- Teacher view (Open Student Activities) always shows the Bonus Zone, whatever the setting. The games are just for fun and use every word from every list the student has had this year: all 9 weeks of earlier terms (in the stage they had that term) plus this term up to the week they're on.
 
 - **Spellsa**: tap letters to find the word before the picture of Spellsa (a girl in a light blue dress) is finished. 6 lives: each wrong letter adds her head, hair, dress, left arm, right arm, then shoes. 💡 Hint shows the definition.
 - **Streaks (Spellsa and Ice Blocks):** 🔥 **Streak** counts words solved in a row and goes back to 0 when a word is lost. 🏆 **Best streak** is the student's highest. Both are kept on that iPad only, separately for each game. A word can't be skipped by reloading the page or leaving the game: if a word was shown and not finished, the streak goes back to 0 the next time the student opens that game, with a message saying why.
@@ -212,6 +223,7 @@ The browser tab and the iPad home-screen icon are both named **Spelling Time**.
 - **Activities**: Room, Term, Activities (the switched-on activities), UpdatedAt. No row for a term means every activity is on.
 - **Purchases**: Room, ClassNumber, Student, ItemId, Price, CatalogVersion, Timestamp
 - **Resets**: Room, ClassNumber, Student, Day, Timestamp (one row each time a student uses the fridge Reset)
+- **Settings**: Room, BonusOn (TRUE/FALSE), BonusRule (week/term), CurrentTerm, CurrentWeek, UpdatedAt (one row per room, written by Teacher → Bonus Zone Settings). A room with no row uses BonusOn TRUE and BonusRule week.
 - **HighScores**: Week (the Monday), Timestamp, Game, Room, ClassNumber, Student, Stage, Score (one row each time a student beats their own best for the week in a bonus game). Old weeks can be deleted by hand; then use *Spelling Time → Refresh the app's saved copies*.
 
 ## Student names
